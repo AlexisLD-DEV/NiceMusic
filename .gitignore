@@ -1,0 +1,30 @@
+# Dépendances
+node_modules/
+
+# Build
+dist/
+dist-ssr/
+
+# Cloudflare / Wrangler
+.wrangler/
+worker/.wrangler/
+worker/.dev.vars
+.dev.vars
+
+# Environnement & secrets
+.env
+.env.*
+!.env.example
+
+# Divers
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Artefacts d'outillage (sessions navigateur, metadata Reasonix)
+.playwright-mcp/
+.reasonix/
