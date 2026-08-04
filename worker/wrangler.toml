@@ -8,4 +8,4 @@ compatibility_date = "2025-06-01"
 # valeur fonctionne : la donnée est stockée en local dans .wrangler/.
 [[kv_namespaces]]
 binding = "NICEMUSIC_KV"
-id = "REMPLACEZ_PAR_L_ID_DU_NAMESPACE_KV"
+id = "f4250d6ebb79408594c95df651da0d76"

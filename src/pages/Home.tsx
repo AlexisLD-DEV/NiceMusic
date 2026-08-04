@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { searchTracks } from '../api/client'
+import { searchTracks } from '../lib/invidious'
 import { SearchBar } from '../components/SearchBar'
 import { TrackList } from '../components/TrackList'
 import { MusicIcon } from '../components/icons'
-import type { Track } from '../lib/types'
 
 export default function Home() {
   const [q, setQ] = useState('')
@@ -22,7 +21,7 @@ export default function Home() {
     enabled: searching
   })
 
-  const results: Track[] = (data?.items ?? []) as Track[]
+  const results = data ?? []
 
   return (
     <div className="safe-top px-4 pb-6 pt-4">
@@ -49,7 +48,7 @@ export default function Home() {
       {searching && isFetching && <p className="py-8 text-center text-sm text-muted">Recherche…</p>}
       {searching && !isFetching && isError && (
         <p className="py-8 text-center text-sm text-red-400">
-          Recherche impossible : vérifiez que le Worker est lancé (<code>pnpm worker:dev</code>).
+          Recherche impossible : toutes les instances Invidious sont injoignables. Réessayez plus tard.
         </p>
       )}
       {searching && !isFetching && !isError && (

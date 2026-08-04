@@ -109,3 +109,80 @@ export function dedupeTracks(tracks: Track[]): Track[] {
   }
   return out
 }
+
+// ---------------------------------------------------------------------------
+// Export « favoris » au format CSV (tableau « mes favoris » de Deezer)
+// En-têtes : Track name, Artist name, Album, Playlist name, Type, ISRC, Deezer - id
+// ---------------------------------------------------------------------------
+
+/** Parse CSV RFC 4180 (champs entre guillemets, `""` échappé, virgule + CRLF/LF). */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  const src = text.replace(/^\uFEFF/, '') // BOM éventuel
+
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i]!
+    if (inQuotes) {
+      if (c === '"') {
+        if (src[i + 1] === '"') {
+          field += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        field += c
+      }
+    } else if (c === '"') {
+      inQuotes = true
+    } else if (c === ',') {
+      row.push(field)
+      field = ''
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && src[i + 1] === '\n') i++
+      row.push(field)
+      field = ''
+      rows.push(row)
+      row = []
+    } else {
+      field += c
+    }
+  }
+  if (field !== '' || row.length > 0) {
+    row.push(field)
+    rows.push(row)
+  }
+  return rows
+}
+
+/** Convertit le CSV des favoris Deezer en titres NiceMusic (non mappés). */
+export function parseDeezerFavoritesCsv(text: string): Track[] {
+  const rows = parseCsv(text)
+  if (rows.length < 2) return []
+
+  const header = rows[0]!.map((h) => h.trim().toLowerCase())
+  const idxTitle = header.indexOf('track name')
+  const idxArtist = header.indexOf('artist name')
+  const idxDeezerId = header.findIndex((h) => h.includes('deezer') && h.includes('id'))
+  if (idxTitle === -1 || idxArtist === -1) return []
+
+  const tracks: Track[] = []
+  for (const r of rows.slice(1)) {
+    const title = r[idxTitle]?.trim()
+    const artist = r[idxArtist]?.trim()
+    if (!title || !artist) continue
+    const deezerIdRaw = idxDeezerId !== -1 ? r[idxDeezerId]?.trim() : undefined
+    const deezerId = deezerIdRaw && /^\d+$/.test(deezerIdRaw) ? Number(deezerIdRaw) : undefined
+    tracks.push({
+      id: `deezer:${deezerIdRaw ?? `${title}-${artist}`}`,
+      title,
+      author: artist,
+      deezerId,
+      unmapped: true
+    })
+  }
+  return dedupeTracks(tracks)
+}

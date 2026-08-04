@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { getInstances } from '../api/client'
+import { checkInstances } from '../lib/invidious'
 import { RefreshIcon } from './icons'
 
 /** Liste des instances Invidious avec leur état de santé (page Réglages). */
 export function InstanceStatus() {
   const { data, isFetching, refetch, isError } = useQuery({
     queryKey: ['instances'],
-    queryFn: getInstances,
+    queryFn: checkInstances,
     staleTime: 30_000
   })
 
@@ -24,20 +24,25 @@ export function InstanceStatus() {
         </button>
       </div>
       <p className="mb-3 text-xs text-muted">
-        La recherche bascule automatiquement vers une instance saine si l'une tombe en panne.
+        La recherche et la lecture basculent automatiquement vers une instance saine. Une instance grisée est
+        inaccessible depuis ce navigateur (hors ligne ou CORS refusé).
       </p>
 
-      {isError && <p className="text-xs text-red-400">Impossible de tester les instances (Worker indisponible ?).</p>}
+      {isError && <p className="text-xs text-red-400">Impossible de tester les instances.</p>}
 
       <ul className="flex flex-col gap-1.5">
-        {(data?.instances ?? []).map((inst) => (
+        {(data ?? []).map((inst) => (
           <li key={inst.url} className="flex items-center gap-2 text-xs">
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${inst.ok ? 'bg-emerald-400' : 'bg-red-400'}`}
               aria-hidden="true"
             />
             <span className="min-w-0 flex-1 truncate text-muted">{inst.url.replace(/^https?:\/\//, '')}</span>
-            {inst.ok ? <span className="tabular-nums text-muted">{inst.latencyMs} ms</span> : <span className="text-red-400">hors ligne</span>}
+            {inst.ok ? (
+              <span className="tabular-nums text-muted">{inst.latencyMs} ms</span>
+            ) : (
+              <span className="text-red-400">hors ligne</span>
+            )}
           </li>
         ))}
       </ul>

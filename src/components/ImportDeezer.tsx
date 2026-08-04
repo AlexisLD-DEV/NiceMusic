@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { dedupeTracks, parseDeezerExport } from '../lib/deezer-import'
+import { dedupeTracks, parseDeezerExport, parseDeezerFavoritesCsv } from '../lib/deezer-import'
 import type { DeezerImportResult } from '../lib/deezer-import'
 import { useImportDeezer } from '../api/queries'
 import { CheckIcon, UploadIcon } from './icons'
@@ -26,6 +26,16 @@ export function ImportDeezer() {
     for (const file of Array.from(files)) {
       try {
         const text = await file.text()
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          // Export « mes favoris » en CSV : favoris uniquement
+          const csvTracks = parseDeezerFavoritesCsv(text)
+          if (csvTracks.length === 0) {
+            setMessage({ ok: false, text: `« ${file.name} » : aucune ligne de favoris reconnue.` })
+            return
+          }
+          merged.favorites.push(...csvTracks)
+          continue
+        }
         const parsed = parseDeezerExport(JSON.parse(text))
         for (const p of parsed.playlists) {
           if (!seenPlaylists.has(p.id)) {
@@ -36,7 +46,7 @@ export function ImportDeezer() {
         merged.favorites.push(...parsed.favorites)
         merged.history.push(...parsed.history)
       } catch {
-        setMessage({ ok: false, text: `« ${file.name} » : JSON illisible.` })
+        setMessage({ ok: false, text: `« ${file.name} » : fichier illisible.` })
         return
       }
     }
@@ -71,14 +81,15 @@ export function ImportDeezer() {
       <p className="mb-3 text-xs leading-relaxed text-muted">
         Sélectionnez les fichiers <code className="text-text">playlists.json</code>,{' '}
         <code className="text-text">favorites.json</code> et <code className="text-text">history.json</code> issus de
-        votre export Deezer (demande de données personnelles). Les titres sont convertis puis cherchés sur YouTube à la
-        lecture.
+        votre export Deezer (demande de données personnelles), ou directement le CSV{' '}
+        <code className="text-text">mes favoris</code> (favoris uniquement). Les titres sont convertis puis cherchés
+        sur YouTube à la lecture.
       </p>
 
       <input
         ref={inputRef}
         type="file"
-        accept=".json,application/json"
+        accept=".json,.csv,application/json,text/csv"
         multiple
         className="hidden"
         onChange={(e) => void handleFiles(e.target.files)}

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { getVideo, getHistory, putHistory, searchTracks } from '../api/client'
+import { getHistory, putHistory } from '../api/client'
+import { listStreamCandidates, searchTracks } from '../lib/invidious'
 import type { Track } from '../lib/types'
 import { updateMediaSession } from '../lib/mediaSession'
 
@@ -36,14 +37,15 @@ interface PlayerState {
   stop: () => void
 }
 
-let retriedLocal = false
+let streamCandidates: string[] = []
+let candidateIndex = 0
 let lastRecordedId: string | null = null
 
 /** Recherche YouTube pour un titre non mappé (issu de l'export Deezer). */
 async function resolveVideoId(track: Track): Promise<Track> {
   if (!track.unmapped) return track
-  const { items } = await searchTracks(`${track.title} ${track.author}`)
-  const first = items[0]
+  const items = await searchTracks(`${track.title} ${track.author}`)
+  const first = pickBestMatch(items, track)
   if (!first) throw new Error(`Aucun résultat YouTube pour « ${track.title} »`)
   return {
     ...track,
@@ -54,6 +56,32 @@ async function resolveVideoId(track: Track): Promise<Track> {
     thumbnail: first.thumbnail,
     unmapped: false
   }
+}
+
+/**
+ * Choisit le résultat le plus pertinent : titre identique (insensible à la
+ * casse) d'abord, puis contenant le titre, puis contenant « official » /
+ * « audio » ; sinon le premier résultat.
+ */
+function pickBestMatch(items: Track[], track: Track): Track | undefined {
+  if (items.length === 0) return undefined
+  const qTitle = track.title.toLowerCase()
+  const qArtist = track.author.toLowerCase()
+
+  const score = (t: Track): number => {
+    const title = t.title.toLowerCase()
+    const artist = t.author.toLowerCase()
+    let s = 0
+    if (title === qTitle) s += 100
+    if (title.includes(qTitle) && qTitle.length > 3) s += 40
+    if (artist.includes(qArtist) || qArtist.includes(artist)) s += 30
+    if (title.includes('official audio')) s += 20
+    if (title.includes('official video')) s += 15
+    if (title.includes('lyrics')) s -= 5
+    if (title.includes('slowed') || title.includes('reverb') || title.includes('remix')) s -= 25
+    return s
+  }
+  return [...items].sort((a, b) => score(b) - score(a))[0]
 }
 
 /** Ajoute le titre à l'historique (KV) — fire-and-forget, dédupliqué par id. */
@@ -69,37 +97,52 @@ async function recordHistory(track: Track): Promise<void> {
   }
 }
 
-/** Joue le titre à l'index donné de la file, en résolvant le stream. */
+/** Joue le titre à l'index donné de la file, en résolvant le flux. */
 async function loadAndPlay(track: Track): Promise<void> {
   const resolved = await resolveVideoId(track)
 
   usePlayer.setState({ current: resolved, error: null, isPlaying: false })
   updateMediaSession(resolved)
 
-  const info = await getVideo(resolved.id)
-  const fmt = info.formats[0]
-  if (!fmt) throw new Error('Aucun format audio disponible pour ce titre')
+  // URLs companion directes (jouées sans redirection ni CORS) ; en cas
+  // d'erreur on essaie la candidate suivante (voir onAudioError).
+  streamCandidates = listStreamCandidates(resolved.id)
+  candidateIndex = 0
+  await playCandidate()
+}
 
-  retriedLocal = fmt.url.includes('local=true')
-  if (audio) {
-    audio.src = fmt.url
-    await audio.play()
-  }
+async function playCandidate(): Promise<void> {
+  const url = streamCandidates[candidateIndex]
+  if (!url || !audio) throw new Error('Aucune source audio disponible')
+  audio.src = url
+  await audio.play()
 }
 
 function onAudioError(): void {
   const { current } = usePlayer.getState()
   if (!audio || !current) return
 
-  // Retry une fois via le proxy de l'instance (anti-hotlink) si ce n'est pas déjà fait
-  if (!retriedLocal && audio.src && !audio.src.includes('local=true')) {
-    retriedLocal = true
-    const url = new URL(audio.src)
-    url.searchParams.set('local', 'true')
-    audio.src = url.toString()
-    audio.play().catch(() => usePlayer.getState().next())
+  // Les companions étant instables, on rejoue la même candidate une fois
+  // (délai court) avant de passer à la suivante…
+  if (candidateIndex < streamCandidates.length) {
+    const url = streamCandidates[candidateIndex]!
+    candidateIndex++
+    const retrySame = `${url}${url.includes('?') ? '&' : '?'}r=${candidateIndex}`
+    audio.src = retrySame
+    setTimeout(() => {
+      audio.play().catch(() => {
+        const next = streamCandidates[candidateIndex]
+        if (next) {
+          audio.src = next
+          void audio.play()
+        } else {
+          usePlayer.getState().next()
+        }
+      })
+    }, 800)
     return
   }
+  // …sinon passer au titre suivant
   usePlayer.getState().next()
 }
 

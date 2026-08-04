@@ -20,8 +20,9 @@ export default function Settings() {
         </p>
         <p className="mt-2">
           La lecture utilise <strong className="text-text">YouTube</strong> via des instances{' '}
-          <strong className="text-text">Invidious</strong> publiques (flux audio seul). Cette dépendance est assumée :
-          si toutes les instances sont hors ligne, la recherche et la lecture s'arrêtent.
+          <strong className="text-text">Invidious</strong> publiques (flux audio seul) ; la recherche passe par le
+          relais Jina Reader. Cette dépendance est assumée : si tout est hors ligne, la recherche et la lecture
+          s'arrêtent.
         </p>
         <p className="mt-2">
           Quotas du free tier Cloudflare : 100 000 lectures KV/jour et 1 000 écritures/jour — largement suffisant en
