@@ -27,12 +27,13 @@ export const INSTANCES: string[] = [
 
 /**
  * Hôtes « companion » (proxy de flux des instances) — maintenable.
- * Format : {host}/companion/latest_version?id=VIDEO&itag=ITAG&local=true
+ * Ordre = fiabilité observée. Format :
+ * {host}/companion/latest_version?id=VIDEO&itag=ITAG&local=true
  */
 export const COMPANIONS: string[] = [
+  'https://inv.zoomerville.com',
   'https://jp1-cmp.invidious.f5.si',
-  'https://eu-de1.companion.invidious.tiekoetter.com',
-  'https://inv.zoomerville.com'
+  'https://eu-de1.companion.invidious.tiekoetter.com'
 ]
 
 /** index de la dernière instance qui a répondu (rotation recherche). */
@@ -147,8 +148,7 @@ export async function searchTracks(q: string): Promise<Track[]> {
  * Candidates d'URL de flux, par ordre de préférence :
  * URLs companion directes (jouées sans redirection, sans CORS) × itag
  * (140 = m4a 128k, 251 = opus 160k), puis chaînes /latest_version en dernier
- * recours. Le lecteur essaie chaque candidate ; si toutes échouent (deux
- * passages), il passe au titre suivant.
+ * recours. Deuxième passage avec cache-buster (les companions sont instables).
  */
 export function listStreamCandidates(videoId: string): string[] {
   const id = encodeURIComponent(videoId)
@@ -161,7 +161,6 @@ export function listStreamCandidates(videoId: string): string[] {
   for (const base of INSTANCES) {
     urls.push(`${base}/latest_version?id=${id}&itag=140&local=true`)
   }
-  // Deuxième passage (les companions sont instables) : cache-buster
   return [...urls, ...urls.map((u, i) => `${u}${u.includes('?') ? '&' : '?'}r=${i}`)]
 }
 

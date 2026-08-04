@@ -39,6 +39,7 @@ interface PlayerState {
 
 let streamCandidates: string[] = []
 let candidateIndex = 0
+let currentTryingUrl = ''
 let lastRecordedId: string | null = null
 
 /** Recherche YouTube pour un titre non mappé (issu de l'export Deezer). */
@@ -104,46 +105,55 @@ async function loadAndPlay(track: Track): Promise<void> {
   usePlayer.setState({ current: resolved, error: null, isPlaying: false })
   updateMediaSession(resolved)
 
-  // URLs companion directes (jouées sans redirection ni CORS) ; en cas
-  // d'erreur on essaie la candidate suivante (voir onAudioError).
+  // URLs companion directes, essayées l'une après l'autre (voir tryStream/advance).
   streamCandidates = listStreamCandidates(resolved.id)
   candidateIndex = 0
-  await playCandidate()
+  tryStream()
 }
 
-async function playCandidate(): Promise<void> {
+/** Tente la candidate courante ; en cas d'échec, advance() prend le relais. */
+function tryStream(): void {
+  if (!audio) return
   const url = streamCandidates[candidateIndex]
-  if (!url || !audio) throw new Error('Aucune source audio disponible')
+  if (!url) {
+    usePlayer.setState({
+      isPlaying: false,
+      error: 'Lecture impossible : aucune source audio disponible. Réessayez dans quelques secondes.'
+    })
+    return
+  }
+  currentTryingUrl = url
   audio.src = url
-  await audio.play()
+  audio.play().catch(() => {
+    // play() rejette (source non supportée, 502…) : l'événement 'error' va
+    // normalement suivre ; sinon on avance après un court délai.
+    window.setTimeout(() => {
+      if (audio && audio.src === currentTryingUrl && audio.paused && audio.currentTime === 0 && audio.readyState <= 2) {
+        advance()
+      }
+    }, 1500)
+  })
+}
+
+/** Passe à la candidate suivante ; si tout a échoué, affiche une erreur claire. */
+function advance(): void {
+  candidateIndex++
+  if (candidateIndex < streamCandidates.length) {
+    tryStream()
+    return
+  }
+  usePlayer.setState({
+    isPlaying: false,
+    error: 'Lecture impossible : les sources Invidious sont indisponibles pour le moment. Réessayez dans quelques secondes.'
+  })
 }
 
 function onAudioError(): void {
   const { current } = usePlayer.getState()
   if (!audio || !current) return
-
-  // Les companions étant instables, on rejoue la même candidate une fois
-  // (délai court) avant de passer à la suivante…
-  if (candidateIndex < streamCandidates.length) {
-    const url = streamCandidates[candidateIndex]!
-    candidateIndex++
-    const retrySame = `${url}${url.includes('?') ? '&' : '?'}r=${candidateIndex}`
-    audio.src = retrySame
-    setTimeout(() => {
-      audio.play().catch(() => {
-        const next = streamCandidates[candidateIndex]
-        if (next) {
-          audio.src = next
-          void audio.play()
-        } else {
-          usePlayer.getState().next()
-        }
-      })
-    }, 800)
-    return
-  }
-  // …sinon passer au titre suivant
-  usePlayer.getState().next()
+  // Ignore les événements obsolètes (une autre candidate est déjà chargée)
+  if (audio.src !== currentTryingUrl) return
+  advance()
 }
 
 // ---------------------------------------------------------------------------
