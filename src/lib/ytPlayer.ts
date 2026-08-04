@@ -1,9 +1,9 @@
 /**
  * Wrapper minimal de l'IFrame API YouTube (lecteur officiel).
  *
- * Permet de lire l'audio/vidéo d'une vidéo YouTube sans dépendre des sources
- * Invidious : le player YouTube officiel gère lui-même la lecture en
- * arrière-plan et les contrôles d'écran verrouillé sur Android.
+ * Permet de lire l'audio/vidéo d'une vidéo YouTube via le lecteur officiel :
+ * il gère lui-même la lecture en arrière-plan et les contrôles d'écran
+ * verrouillé sur Android.
  *
  * Le conteneur <div> doit exister dans le DOM (voir PlayerBar). La vidéo est
  * jouée par le player officiel ; l'app ne contrôle que la file (loadVideoById)

@@ -6,7 +6,7 @@ import { MusicIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, CloseIcon, VolumeIc
 
 /** Barre de lecture persistante, au-dessus de la navigation. */
 export function PlayerBar() {
-  const { current, isPlaying, loading, currentTime, duration, error, queue, index, mode, volume, setVolume } =
+  const { current, isPlaying, loading, currentTime, duration, error, queue, index, volume, setVolume } =
     usePlayer()
   const [showVideo, setShowVideo] = useState(false)
   const [volOpen, setVolOpen] = useState(false)
@@ -15,33 +15,30 @@ export function PlayerBar() {
   if (!current) return null
 
   const max = duration || 0
-  const isYoutube = mode === 'youtube'
   const muted = volume <= 0.01
 
   return (
     <div className="relative border-t border-border bg-surface px-3 pb-1.5 pt-2">
       {/* Lecteur YouTube (officiel) — masqué par défaut, affichable à la demande */}
-      {isYoutube && (
-        <div
-          className={
-            showVideo
-              ? 'fixed bottom-40 right-3 z-50 w-72 overflow-hidden rounded-xl border border-border bg-black shadow-2xl'
-              : 'pointer-events-none fixed -left-[9999px] top-0 w-72'
-          }
-          aria-hidden={!showVideo}
-        >
-          <div id={YT_PLAYER_ID} className="aspect-video w-full" />
-          {showVideo && (
-            <button
-              onClick={() => setShowVideo(false)}
-              className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white"
-              aria-label="Masquer la vidéo"
-            >
-              <CloseIcon width={14} height={14} />
-            </button>
-          )}
-        </div>
-      )}
+      <div
+        className={
+          showVideo
+            ? 'fixed bottom-40 right-3 z-50 w-72 overflow-hidden rounded-xl border border-border bg-black shadow-2xl'
+            : 'pointer-events-none fixed -left-[9999px] top-0 w-72'
+        }
+        aria-hidden={!showVideo}
+      >
+        <div id={YT_PLAYER_ID} className="aspect-video w-full" />
+        {showVideo && (
+          <button
+            onClick={() => setShowVideo(false)}
+            className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white"
+            aria-label="Masquer la vidéo"
+          >
+            <CloseIcon width={14} height={14} />
+          </button>
+        )}
+      </div>
 
       {/* Popover volume */}
       {volOpen && (
@@ -109,17 +106,15 @@ export function PlayerBar() {
           </span>
         )}
 
-        {isYoutube && (
-          <button
-            onClick={() => setShowVideo((v) => !v)}
-            className={`shrink-0 rounded-full border border-border px-2.5 py-1 text-[10px] transition active:scale-95 ${
-              showVideo ? 'btn-accent text-white' : 'bg-surface2 text-muted'
-            }`}
-            aria-label={showVideo ? 'Masquer la vidéo' : 'Afficher la vidéo'}
-          >
-            {showVideo ? 'Vidéo ✓' : 'Vidéo'}
-          </button>
-        )}
+        <button
+          onClick={() => setShowVideo((v) => !v)}
+          className={`shrink-0 rounded-full border border-border px-2.5 py-1 text-[10px] transition active:scale-95 ${
+            showVideo ? 'btn-accent text-white' : 'bg-surface2 text-muted'
+          }`}
+          aria-label={showVideo ? 'Masquer la vidéo' : 'Afficher la vidéo'}
+        >
+          {showVideo ? 'Vidéo ✓' : 'Vidéo'}
+        </button>
 
         <button
           onClick={() => setVolOpen((v) => !v)}

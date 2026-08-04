@@ -1,18 +1,13 @@
 import type { Track } from './types'
 
 /**
- * Accès aux instances Invidious depuis le navigateur.
+ * Accès à la recherche YouTube depuis le navigateur.
  *
  * Contexte 2026 : les instances publiques bloquent (soft-block : 200 + HTML)
  * les IP de datacenter (Cloudflare) et servent du HTML aux User-Agents
  * navigateur. La recherche passe donc par un relais de lecture (Jina Reader,
  * r.jina.ai) qui proxifie depuis ses propres IP avec CORS ouvert, avec repli
  * sur un appel direct (si une instance l'autorise un jour).
- *
- * La lecture utilise les URLs « companion » directes (déterministes par
- * instance) : l'élément <audio> les joue sans CORS ni redirection (les
- * chaînes 302 sont bloquées par Chrome — ORB). Les companions étant instables
- * selon la vidéo, le lecteur essaie chaque candidate à tour de rôle.
  */
 
 /** Instances Invidious publiques — à maintenir ; la rotation ignore les mortes. */
@@ -26,9 +21,8 @@ export const INSTANCES: string[] = [
 ]
 
 /**
- * Hôtes « companion » (proxy de flux des instances) — maintenable.
- * Ordre = fiabilité observée. Format :
- * {host}/companion/latest_version?id=VIDEO&itag=ITAG&local=true
+ * Hôtes « companion » (proxy de flux des instances) — conservé pour référence
+ * historique (le mode audio a été retiré).
  */
 export const COMPANIONS: string[] = [
   'https://inv.zoomerville.com',
@@ -87,7 +81,7 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
 // Recherche
 // ---------------------------------------------------------------------------
 
-/** Recherche YouTube (Invidious) : relais Jina d'abord, puis direct. */
+/** Recherche YouTube : relais Jina d'abord, puis direct. */
 export async function searchTracks(q: string): Promise<Track[]> {
   const query = q.trim()
   if (!query) return []
@@ -137,34 +131,7 @@ export async function searchTracks(q: string): Promise<Track[]> {
     }
   }
 
-  throw new Error('Recherche impossible : instances Invidious et relais injoignables')
-}
-
-// ---------------------------------------------------------------------------
-// Flux audio
-// ---------------------------------------------------------------------------
-
-/**
- * Candidates d'URL de flux, par ordre de préférence :
- * URLs companion directes (jouées sans redirection, sans CORS) × itag
- * (140 = m4a 128k, 251 = opus 160k), puis chaînes /latest_version en dernier
- * recours. Deuxième passage avec cache-buster (les companions sont instables).
- */
-export function listStreamCandidates(videoId: string): string[] {
-  const id = encodeURIComponent(videoId)
-  const urls: string[] = []
-  // 1) companions connus (proxy direct, le plus fiable)
-  for (const host of COMPANIONS) {
-    for (const itag of [140, 251]) {
-      urls.push(`${host}/companion/latest_version?id=${id}&itag=${itag}&local=true`)
-    }
-  }
-  // 2) chaînes /latest_version des instances (certaines servent en direct)
-  for (const base of INSTANCES) {
-    urls.push(`${base}/latest_version?id=${id}&itag=140&local=true`)
-    urls.push(`${base}/latest_version?id=${id}&itag=251&local=true`)
-  }
-  return urls
+  throw new Error('Recherche impossible. Réessayez dans quelques secondes.')
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +152,7 @@ export function parseYoutubeUrl(input: string): string | null {
   return null
 }
 
-/** Récupère le titre/artiste d'une vidéo : oEmbed YouTube d'abord, puis Invidious (relais Jina). */
+/** Récupère le titre/artiste d'une vidéo : oEmbed YouTube d'abord, puis repli via le relais. */
 export async function fetchVideoInfo(videoId: string): Promise<{ title: string; author: string; thumbnail?: string }> {
   const thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
 
@@ -203,7 +170,7 @@ export async function fetchVideoInfo(videoId: string): Promise<{ title: string; 
     /* on tente le repli */
   }
 
-  // 2) Repli : infos vidéo via une instance Invidious (relais Jina)
+  // 2) Repli : infos vidéo via le relais (r.jina.ai) sur une instance
   for (let i = 0; i < INSTANCES.length; i++) {
     const idx = (lastGood + 1 + i) % INSTANCES.length
     const base = INSTANCES[idx]!

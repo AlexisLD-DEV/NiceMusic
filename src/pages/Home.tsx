@@ -39,16 +39,14 @@ export default function Home() {
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-muted">
             <MusicIcon width={28} height={28} />
           </div>
-          <p className="max-w-60 text-sm text-muted">
-            Tapez un titre ou un artiste pour chercher sur YouTube (via Invidious).
-          </p>
+          <p className="max-w-60 text-sm text-muted">Tapez un titre ou un artiste pour chercher sur YouTube.</p>
         </div>
       )}
 
       {searching && isFetching && <p className="py-8 text-center text-sm text-muted">Recherche…</p>}
       {searching && !isFetching && isError && (
         <p className="py-8 text-center text-sm text-red-400">
-          Recherche impossible : toutes les instances Invidious sont injoignables. Réessayez plus tard.
+          Recherche impossible. Vérifiez votre connexion et réessayez.
         </p>
       )}
       {searching && !isFetching && !isError && (

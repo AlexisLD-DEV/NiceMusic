@@ -38,9 +38,7 @@ export interface PlaylistsBlob {
 }
 
 export interface SettingsBlob {
-  /** instance Invidious préférée (si vide, auto) */
-  instance?: string
-  /** mode de lecture : 'youtube' (lecteur officiel, défaut) ou 'audio' (Invidious) */
+  /** ancien champ (mode audio supprimé) — conservé pour compatibilité KV */
   playbackMode?: 'youtube' | 'audio'
 }
 

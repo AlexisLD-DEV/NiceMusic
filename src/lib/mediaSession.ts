@@ -3,7 +3,7 @@ import type { Track } from './types'
 /**
  * Media Session API : contrôles play/pause/précédent/suivant/seek sur l'écran
  * verrouillé Android (et dans le centre de notifications), pendant que la
- * musique tourne — dans les deux modes de lecture (YouTube et audio Invidious).
+ * musique tourne (lecteur YouTube officiel).
  */
 export function setupMediaSession(handlers: {
   onPlay: () => void
