@@ -1,24 +1,46 @@
 import { create } from 'zustand'
-import { getHistory, getMappings, putHistory, putMappings } from '../api/client'
+import { getHistory, getMappings, getSettings, putHistory, putMappings, putSettings } from '../api/client'
 import { listStreamCandidates, searchTracks } from '../lib/invidious'
+import {
+  createYTPlayer,
+  destroyYTPlayer,
+  ytCurrentTime,
+  ytDuration,
+  ytPause,
+  ytPlayVideo,
+  ytResume,
+  ytSeek,
+  type YTPlaybackState
+} from '../lib/ytPlayer'
 import type { Track } from '../lib/types'
 import { updateMediaSession } from '../lib/mediaSession'
 
 /**
- * Store du lecteur.
+ * Store du lecteur — deux backends de lecture :
  *
- * Le stream audio est lu en direct depuis l'instance Invidious via un élément
- * <audio> unique (module-level) : la lecture continue quand l'écran se verrouille,
- * et les contrôles passent par la Media Session API (voir mediaSession.ts).
+ * 1) 'youtube' (défaut) : lecteur officiel YouTube (IFrame API). Fiable, la
+ *    lecture continue en arrière-plan et les contrôles d'écran verrouillé sont
+ *    fournis par le player YouTube lui-même. La vidéo peut être masquée.
+ * 2) 'audio' : flux audio seul via Invidious (élément <audio> + Media Session).
  *
- * Performance : les sources de flux sont sondées EN PARALLÈLE (quelques
- * secondes max) au lieu d'être essayées une par une ; le mapping
- * Deezer→YouTube est mis en cache (KV) pour ne relancer une recherche YouTube
- * qu'une seule fois par titre.
+ * Le mapping Deezer→YouTube est mis en cache (KV, batché) pour ne relancer une
+ * recherche YouTube qu'une seule fois par titre.
  */
 
+export type PlaybackMode = 'youtube' | 'audio'
+
+const MODE_KEY = 'nicemusic.mode'
+
+function initialMode(): PlaybackMode {
+  try {
+    return localStorage.getItem(MODE_KEY) === 'audio' ? 'audio' : 'youtube'
+  } catch {
+    return 'youtube'
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Élément audio unique
+// Élément audio unique (backend 'audio')
 // ---------------------------------------------------------------------------
 
 const audio: HTMLAudioElement | null = typeof window !== 'undefined' ? new Audio() : null
@@ -36,6 +58,8 @@ interface PlayerState {
   currentTime: number
   duration: number
   error: string | null
+  mode: PlaybackMode
+  setMode: (mode: PlaybackMode) => void
   play: (track: Track, queue?: Track[]) => Promise<void>
   toggle: () => Promise<void>
   next: () => void
@@ -102,12 +126,10 @@ async function flushMappings(): Promise<void> {
     for (const [key, value] of batch) mappings[key] = value
     await putMappings({ mappings })
   } catch {
-    // échec (hors ligne ou quota) : on remet en attente pour le prochain flush
     for (const [key, value] of batch) pendingMappings.set(key, value)
   }
 }
 
-// À la fermeture de l'app, on tente un dernier flush
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => {
     if (pendingMappings.size > 0) void flushMappings()
@@ -183,18 +205,12 @@ async function recordHistory(track: Track): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Sondage parallèle des sources
+// Backend 'audio' : sondage parallèle des sources Invidious
 // ---------------------------------------------------------------------------
 
 /** Dernière URL qui a réellement joué (rotation : on la retente en premier). */
 let lastWorkingUrl: string | null = null
 
-/**
- * Sonde des URLs de flux en parallèle (éléments <audio> temporaires) et
- * renvoie la première qui charge réellement des données.
- * Signaux fiables : 'loadedmetadata'/'loadeddata'/'canplay' OU readyState ≥ 2
- * (certains flux m4a n'envoient pas 'loadedmetadata' si le moov est en fin).
- */
 function probeStreams(urls: string[], timeoutMs: number): Promise<string | null> {
   return new Promise((resolve) => {
     if (urls.length === 0) {
@@ -236,7 +252,6 @@ function probeStreams(urls: string[], timeoutMs: number): Promise<string | null>
       probe.onloadeddata = ok
       probe.oncanplay = ok
       probe.onerror = fail
-      // Filet de sécurité : readyState ≥ 2 (données de lecture dispo)
       poll = window.setInterval(() => {
         if (!settled && probe.readyState >= 2) ok()
       }, 200)
@@ -245,7 +260,6 @@ function probeStreams(urls: string[], timeoutMs: number): Promise<string | null>
   })
 }
 
-/** Remonte la dernière URL qui a joué en tête des candidats. */
 function reorderCandidates(candidates: string[]): string[] {
   if (!lastWorkingUrl) return candidates
   const rest = candidates.filter((u) => u !== lastWorkingUrl)
@@ -260,15 +274,12 @@ function streamError(): string {
   return 'Lecture impossible : les sources Invidious sont indisponibles pour le moment. Réessayez dans quelques secondes.'
 }
 
-/** Joue le titre à l'index donné de la file, en résolvant le flux. */
-async function loadAndPlay(track: Track): Promise<void> {
+async function playAudioTrack(track: Track): Promise<void> {
   const resolved = await resolveVideoId(track)
 
   usePlayer.setState({ current: resolved, error: null, isPlaying: false, loading: true })
   updateMediaSession(resolved)
 
-  // Sondage parallèle de toutes les sources ; si tout échoue, re-sonde après
-  // 4 s (les companions se rétablissent souvent en quelques secondes).
   const candidates = reorderCandidates(listStreamCandidates(resolved.id))
   remainingCandidates = candidates
   let url = await probeStreams(candidates, 4_500)
@@ -284,7 +295,6 @@ async function loadAndPlay(track: Track): Promise<void> {
   playUrl(url)
 }
 
-/** Joue une URL de flux ; les échecs ultérieurs sont gérés par onAudioError. */
 function playUrl(url: string): void {
   if (!audio) return
   currentTryingUrl = url
@@ -298,10 +308,8 @@ function playUrl(url: string): void {
 function onAudioError(): void {
   const { current } = usePlayer.getState()
   if (!audio || !current) return
-  // Ignore les événements obsolètes (une autre source est déjà chargée)
   if (audio.src !== currentTryingUrl) return
 
-  // Re-sonde les sources restantes ; sinon erreur claire.
   void (async () => {
     const url = await probeStreams(reorderCandidates(remainingCandidates), 3_500)
     if (url) {
@@ -312,10 +320,6 @@ function onAudioError(): void {
   })()
 }
 
-// ---------------------------------------------------------------------------
-// Événements de l'élément audio
-// ---------------------------------------------------------------------------
-
 if (audio) {
   audio.addEventListener('ended', () => usePlayer.getState().next())
   audio.addEventListener('timeupdate', () => {
@@ -323,7 +327,6 @@ if (audio) {
       currentTime: audio.currentTime,
       duration: audio.duration && Number.isFinite(audio.duration) ? audio.duration : 0
     })
-    // Historique : uniquement une fois qu'on écoute vraiment (≥ 20 s)
     const { current } = usePlayer.getState()
     if (current && audio.currentTime >= 20) void recordHistory(current)
   })
@@ -339,6 +342,124 @@ if (audio) {
 }
 
 // ---------------------------------------------------------------------------
+// Backend 'youtube' : lecteur officiel (IFrame API)
+// ---------------------------------------------------------------------------
+
+let ytReady = false
+let ytPending: string | null = null
+let ytPoll: number | null = null
+
+function startYtPoll(): void {
+  if (ytPoll !== null) return
+  ytPoll = window.setInterval(() => {
+    const t = ytCurrentTime()
+    const d = ytDuration()
+    usePlayer.setState({ currentTime: t, duration: d })
+    const { current } = usePlayer.getState()
+    if (current && t >= 20) void recordHistory(current)
+  }, 500)
+}
+
+function stopYtPoll(): void {
+  if (ytPoll !== null) {
+    window.clearInterval(ytPoll)
+    ytPoll = null
+  }
+}
+
+const YT_PLAYER_ID = 'yt-player-container'
+
+/** Repli automatique : le lecteur YouTube est indisponible → mode audio. */
+function ytFallbackToAudio(): void {
+  stopYtPoll()
+  const { current } = usePlayer.getState()
+  if (!current) {
+    usePlayer.setState({ isPlaying: false, loading: false, error: 'Lecteur YouTube indisponible.' })
+    return
+  }
+  usePlayer.setState({
+    error: 'Lecteur YouTube indisponible — lecture audio de secours.',
+    loading: false,
+    isPlaying: false
+  })
+  void playAudioTrack(current)
+}
+
+async function playYtTrack(track: Track): Promise<void> {
+  const resolved = await resolveVideoId(track)
+  usePlayer.setState({ current: resolved, error: null, isPlaying: false, loading: true })
+
+  try {
+    if (!ytReady) {
+      const el = document.getElementById(YT_PLAYER_ID)
+      if (!el) throw new Error('Conteneur du lecteur YouTube introuvable')
+      await createYTPlayer(el, {
+        onReady: () => {
+          ytReady = true
+          if (ytPending) {
+            ytPlayVideo(ytPending)
+            ytPending = null
+          }
+        },
+        onStateChange: (state: YTPlaybackState) => {
+          if (state === 1) {
+            usePlayer.setState({ isPlaying: true, loading: false })
+            startYtPoll()
+          } else if (state === 2) {
+            usePlayer.setState({ isPlaying: false })
+            stopYtPoll()
+          } else if (state === 0) {
+            stopYtPoll()
+            usePlayer.getState().next()
+          }
+        },
+        onError: () => ytFallbackToAudio()
+      })
+    }
+    ytPending = resolved.id
+    if (ytReady) {
+      ytPlayVideo(resolved.id)
+    }
+  } catch {
+    ytFallbackToAudio()
+  }
+}
+
+/** Dispatcher : joue le titre avec le backend actif. */
+async function loadAndPlay(track: Track): Promise<void> {
+  if (usePlayer.getState().mode === 'youtube') {
+    await playYtTrack(track)
+  } else {
+    await playAudioTrack(track)
+  }
+}
+
+// Synchronise le mode depuis les réglages KV (si pas de choix local explicite)
+async function syncModeFromSettings(): Promise<void> {
+  try {
+    const hasLocal = (() => {
+      try {
+        return localStorage.getItem(MODE_KEY) !== null
+      } catch {
+        return false
+      }
+    })()
+    if (hasLocal) return
+    const settings = await getSettings()
+    if (settings.playbackMode === 'youtube' || settings.playbackMode === 'audio') {
+      try {
+        localStorage.setItem(MODE_KEY, settings.playbackMode)
+      } catch {
+        /* ignoré */
+      }
+      usePlayer.setState({ mode: settings.playbackMode })
+    }
+  } catch {
+    /* hors ligne : on garde le défaut */
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
@@ -351,6 +472,38 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   currentTime: 0,
   duration: 0,
   error: null,
+  mode: initialMode(),
+
+  setMode(mode) {
+    if (get().mode === mode) return
+    try {
+      localStorage.setItem(MODE_KEY, mode)
+    } catch {
+      /* ignoré */
+    }
+    set({ mode })
+    if (mode === 'audio') {
+      // Libère le lecteur YouTube (le conteneur va être démonté par l'UI)
+      destroyYTPlayer()
+      ytReady = false
+      ytPending = null
+    }
+    // Persiste dans les réglages (synchro entre appareils) — fire-and-forget
+    void (async () => {
+      try {
+        const settings = await getSettings()
+        await putSettings({ ...settings, playbackMode: mode })
+      } catch {
+        /* silencieux */
+      }
+    })()
+    // Relance le titre courant dans le nouveau mode
+    const { current, queue } = get()
+    if (current) {
+      stopCurrentPlayback()
+      void get().play(current, queue)
+    }
+  },
 
   async play(track, queue) {
     const q = queue ?? (get().queue.some((t) => t.id === track.id) ? get().queue : [track])
@@ -365,6 +518,14 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
 
   async toggle() {
     if (!get().current) return
+    if (get().mode === 'youtube') {
+      if (get().isPlaying) {
+        ytPause()
+      } else {
+        ytResume()
+      }
+      return
+    }
     if (audio?.paused) {
       await audio.play()
     } else {
@@ -395,18 +556,36 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   seek(time) {
-    if (audio) {
+    if (get().mode === 'youtube') {
+      ytSeek(time)
+    } else if (audio) {
       audio.currentTime = time
-      set({ currentTime: time })
     }
+    set({ currentTime: time })
   },
 
   stop() {
-    if (audio) {
-      audio.pause()
-      audio.removeAttribute('src')
-      audio.load()
-    }
+    stopCurrentPlayback()
     set({ isPlaying: false, currentTime: 0, loading: false })
   }
 }))
+
+/** Arrête la lecture courante sur les deux backends. */
+function stopCurrentPlayback(): void {
+  if (audio) {
+    audio.pause()
+    audio.removeAttribute('src')
+    audio.load()
+  }
+  ytPause()
+  stopYtPoll()
+}
+
+if (typeof window !== 'undefined') {
+  void syncModeFromSettings()
+  window.addEventListener('pagehide', () => {
+    destroyYTPlayer()
+  })
+}
+
+export { YT_PLAYER_ID }

@@ -12,11 +12,14 @@ PWA installable sur Android : contrôles play/pause/précédent/suivant sur l'é
 - **Import de l'export Deezer** : fichiers `playlists.json` / `favorites.json` / `history.json`
   (demande de données personnelles), **ou le CSV « mes favoris »** (tableau exporté, favoris uniquement) →
   conversion automatique. Les titres sont cherchés sur YouTube à la lecture.
+- **Lecture via le lecteur officiel YouTube** (par défaut) : fiable, la musique continue écran verrouillé
+  avec les contrôles YouTube, **vidéo masquée par défaut** (bouton « Vidéo » dans le player pour l'afficher).
+- **Mode « Audio seul » (Invidious)** en option (Réglages) : flux audio uniquement via instances
+  Invidious (économise les données mais dépend de sources instables).
 - **Recherche YouTube** : via instances Invidious publiques relayées par Jina Reader (les IP
   datacenter sont bloquées par les instances), avec bascule automatique.
-- **Lecture audio seule** (m4a/opus, pas de vidéo), en arrière-plan, via les proxies « companion »
-  des instances (URLs directes, rotation + retries automatiques).
-- **Contrôles écran verrouillé** : play/pause/précédent/suivant/seek (Media Session API).
+- **Contrôles écran verrouillé** : fournis par le player YouTube (mode par défaut) ou par la
+  Media Session API (mode audio).
 - **Favoris + historique + playlists**, synchronisés entre téléphone et PC via KV.
 - **PWA** : installation sur l'écran d'accueil Android, plein écran.
 
@@ -106,21 +109,21 @@ Ouvrez `https://music.ledeunf.fr` dans Chrome → menu ⋮ → « Ajouter à l'�
 
 ## Limites connues
 
-- **Dépendance à Invidious + Jina** : instances publiques hors de notre contrôle. La recherche
-  passe par le relais de lecture Jina Reader (`r.jina.ai`, gratuit, sans clé — limité en débit) ;
-  la lecture par les proxies « companion » des instances (instables selon la vidéo : retries
-  automatiques, sinon le titre suivant). Liste maintenue dans `src/lib/invidious.ts`.
-- **Écosystème Invidious dégradé** (2026) : le endpoint `/api/v1/videos` et la recherche directe
-  sont bloqués depuis les IP Cloudflare ; les chaînes de redirection `/latest_version` sont
-  bloquées par Chrome (ORB) — d'où le relais Jina pour la recherche et les URLs companion
-  directes pour la lecture.
+- **Mode « Audio seul »** : dépend d'instances Invidious publiques hors de notre contrôle (2026 :
+  écosystème dégradé, proxies de flux instables). Le mode par défaut (lecteur YouTube officiel)
+  contourne ce problème. Liste maintenue dans `src/lib/invidious.ts`.
+- **Mode YouTube** : la vidéo est chargée (masquée par défaut) et consomme plus de données ;
+  des publicités peuvent apparaître ; sur iOS Safari la lecture en arrière-plan n'est pas garantie
+  (Android OK — c'est la cible).
+- **Recherche** : passe par le relais Jina Reader (`r.jina.ai`, gratuit, sans clé — limité en débit).
 - **Quotas KV free tier** : 100 000 lectures/jour, 1 000 écritures/jour. Conçu pour : les données
-  sont stockées par lots (favoris, historique, playlists = 1 clé chacun), pas une clé par titre.
+  sont stockées par lots, l'historique n'est écrit qu'après 20 s d'écoute (max 1/30 s), les mappings
+  Deezer→YouTube sont batchés.
 - **Export Deezer** : le format varie selon les versions ; le parseur accepte les champs courts et
   longs, et le CSV « mes favoris ». Un titre non mappé est cherché sur YouTube à la première
   lecture (badge « Deezer », choix du meilleur résultat : titre exact, officiel de préférence).
-- **Usage personnel assumé** : les flux YouTube proviennent de sources tierces non officielles
-  (Invidious), à utiliser dans le cadre de votre usage personnel.
+- **Usage personnel assumé** : la lecture YouTube passe par le player officiel embarqué (usage
+  personnel, à respecter les CGU YouTube).
 
 ## À faire (idées)
 
