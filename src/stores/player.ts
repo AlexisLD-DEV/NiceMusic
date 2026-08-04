@@ -36,6 +36,10 @@ export type PlaybackMode = 'youtube' | 'audio'
 
 const MODE_KEY = 'nicemusic.mode'
 const VOLUME_KEY = 'nicemusic.volume'
+const SHUFFLE_KEY = 'nicemusic.shuffle'
+const REPEAT_KEY = 'nicemusic.repeat'
+
+export type RepeatMode = 'off' | 'all' | 'one'
 
 function initialMode(): PlaybackMode {
   try {
@@ -77,6 +81,10 @@ interface PlayerState {
   error: string | null
   volume: number
   setVolume: (v: number) => void
+  shuffle: boolean
+  setShuffle: (v: boolean) => void
+  repeat: RepeatMode
+  setRepeat: (r: RepeatMode) => void
   mode: PlaybackMode
   setMode: (mode: PlaybackMode) => void
   play: (track: Track, queue?: Track[]) => Promise<void>
@@ -309,6 +317,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => window.setTimeout(r, ms))
 }
 
+/** Index aléatoire différent de l'index courant (mode aléatoire). */
+function randomOtherIndex(current: number, length: number): number {
+  if (length <= 1) return 0
+  let i = current
+  while (i === current) i = Math.floor(Math.random() * length)
+  return i
+}
+
 function streamError(): string {
   return 'Lecture impossible : les sources Invidious sont indisponibles pour le moment. Réessayez dans quelques secondes.'
 }
@@ -520,6 +536,21 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   duration: 0,
   error: null,
   volume: initialVolume(),
+  shuffle: (() => {
+    try {
+      return localStorage.getItem(SHUFFLE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })(),
+  repeat: (() => {
+    try {
+      const r = localStorage.getItem(REPEAT_KEY)
+      return r === 'all' || r === 'one' ? r : 'off'
+    } catch {
+      return 'off'
+    }
+  })(),
   mode: initialMode(),
 
   setVolume(v) {
@@ -532,6 +563,24 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     set({ volume: clamped })
     if (audio) audio.volume = clamped
     ytSetVolume(clamped)
+  },
+
+  setShuffle(v) {
+    try {
+      localStorage.setItem(SHUFFLE_KEY, v ? '1' : '0')
+    } catch {
+      /* ignoré */
+    }
+    set({ shuffle: v })
+  },
+
+  setRepeat(r) {
+    try {
+      localStorage.setItem(REPEAT_KEY, r)
+    } catch {
+      /* ignoré */
+    }
+    set({ repeat: r })
   },
 
   setMode(mode) {
@@ -594,22 +643,45 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   next() {
-    const { queue, index } = get()
+    const { queue, index, shuffle, repeat } = get()
     if (!queue.length) return
-    const nextIndex = (index + 1) % queue.length
+
+    // Répéter le titre courant (mode « répéter un seul »)
+    if (repeat === 'one') {
+      get().seek(0)
+      if (get().mode === 'youtube') {
+        ytResume()
+      } else {
+        audio?.play().catch(() => {})
+      }
+      return
+    }
+
+    // Fin de file sans répétition → on s'arrête
+    if (!shuffle && repeat !== 'all' && index === queue.length - 1) {
+      stopCurrentPlayback()
+      set({ isPlaying: false, currentTime: 0 })
+      return
+    }
+
+    const nextIndex = shuffle
+      ? randomOtherIndex(index, queue.length)
+      : (index + 1) % queue.length
     const track = queue[nextIndex]!
     set({ index: nextIndex })
     loadAndPlay(track).catch(() => set({ error: 'Lecture impossible', loading: false }))
   },
 
   prev() {
-    const { queue, index, currentTime } = get()
+    const { queue, index, currentTime, shuffle } = get()
     if (!queue.length) return
     if (currentTime > 3) {
       get().seek(0)
       return
     }
-    const prevIndex = (index - 1 + queue.length) % queue.length
+    const prevIndex = shuffle
+      ? randomOtherIndex(index, queue.length)
+      : (index - 1 + queue.length) % queue.length
     const track = queue[prevIndex]!
     set({ index: prevIndex })
     loadAndPlay(track).catch(() => set({ error: 'Lecture impossible', loading: false }))

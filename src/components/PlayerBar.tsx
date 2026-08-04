@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { usePlayer, YT_PLAYER_ID } from '../stores/player'
 import { formatDuration } from '../lib/utils'
+import { NowPlaying } from './NowPlaying'
 import { MusicIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, CloseIcon, VolumeIcon, VolumeMuteIcon } from './icons'
 
 /** Barre de lecture persistante, au-dessus de la navigation. */
@@ -9,6 +10,7 @@ export function PlayerBar() {
     usePlayer()
   const [showVideo, setShowVideo] = useState(false)
   const [volOpen, setVolOpen] = useState(false)
+  const [nowPlaying, setNowPlaying] = useState(false)
 
   if (!current) return null
 
@@ -71,28 +73,35 @@ export function PlayerBar() {
       ) : null}
 
       <div className="flex items-center gap-3">
-        {current.thumbnail ? (
-          <img src={current.thumbnail} alt="" className="h-11 w-11 rounded-md object-cover" loading="lazy" />
-        ) : (
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-surface2 text-muted">
-            <MusicIcon width={20} height={20} />
-          </div>
-        )}
-
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium leading-tight">{current.title}</p>
-            <p className="truncate text-xs text-muted">{current.author}</p>
-          </div>
-          {isPlaying && (
-            <div className="eq shrink-0" aria-label="En lecture">
-              <span />
-              <span />
-              <span />
-              <span />
+        {/* Tap sur la pochette/titre → écran « En lecture » */}
+        <button
+          onClick={() => setNowPlaying(true)}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-label="Ouvrir l'écran En lecture"
+        >
+          {current.thumbnail ? (
+            <img src={current.thumbnail} alt="" className="h-11 w-11 rounded-md object-cover" loading="lazy" />
+          ) : (
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-surface2 text-muted">
+              <MusicIcon width={20} height={20} />
             </div>
           )}
-        </div>
+
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium leading-tight">{current.title}</p>
+              <p className="truncate text-xs text-muted">{current.author}</p>
+            </div>
+            {isPlaying && (
+              <div className="eq shrink-0" aria-label="En lecture">
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+            )}
+          </div>
+        </button>
 
         {queue.length > 1 && (
           <span className="shrink-0 text-[10px] tabular-nums text-muted">
@@ -159,6 +168,9 @@ export function PlayerBar() {
         <span>{formatDuration(currentTime)}</span>
         <span>{formatDuration(duration)}</span>
       </div>
+
+      {/* Écran « En lecture » plein écran */}
+      {nowPlaying && <NowPlaying onClose={() => setNowPlaying(false)} />}
     </div>
   )
 }

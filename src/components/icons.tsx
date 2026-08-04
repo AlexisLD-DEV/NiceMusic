@@ -156,3 +156,38 @@ export const VolumeMuteIcon = (p: P) => (
     <path d="m15 9 6 6M21 9l-6 6" />
   </Svg>
 )
+
+export const ShuffleIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M3 6h3.5c2 0 3.5 1.2 4.5 3 1-1.8 2.5-3 4.5-3H21" />
+    <path d="m17 3 4 3-4 3" />
+    <path d="M3 18h3.5c2 0 3.5-1.2 4.5-3 1 1.8 2.5 3 4.5 3H21" />
+    <path d="m17 15 4 3-4 3" />
+  </Svg>
+)
+
+export const RepeatIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="m17 2 4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="m7 22-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+  </Svg>
+)
+
+export const RepeatOneIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="m17 2 4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="m7 22-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+    <path d="M11 10h1.5v4" />
+    <path d="M11 14h3" />
+  </Svg>
+)
+
+export const ChevronDownIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Svg>
+)
