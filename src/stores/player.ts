@@ -263,8 +263,18 @@ function ytError(): string {
 }
 
 async function playYtTrack(track: Track): Promise<void> {
-  const resolved = await resolveVideoId(track)
-  usePlayer.setState({ current: resolved, error: null, isPlaying: false, loading: true })
+  // Affichage optimiste : on montre le titre tout de suite (titre/artiste),
+  // puis on résout son vidéoId YouTube en arrière-plan.
+  usePlayer.setState({ current: track, error: null, isPlaying: false, loading: true })
+  updateMediaSession(track)
+  let resolved: Track
+  try {
+    resolved = await resolveVideoId(track)
+  } catch (e) {
+    usePlayer.setState({ loading: false, error: e instanceof Error ? e.message : ytError() })
+    return
+  }
+  usePlayer.setState({ current: resolved })
   // Métadonnées + contrôles sur l'écran verrouillé (play/pause/précédent/suivant)
   updateMediaSession(resolved)
 
@@ -287,6 +297,7 @@ async function playYtTrack(track: Track): Promise<void> {
           usePlayer.setState({ isPlaying: true, loading: false })
           setMediaSessionPlaybackState('playing')
           startYtPoll()
+          void prefetchUpcoming()
         } else if (state === 2) {
           usePlayer.setState({ isPlaying: false })
           setMediaSessionPlaybackState('paused')
@@ -304,6 +315,41 @@ async function playYtTrack(track: Track): Promise<void> {
   ytPending = resolved.id
   if (ytReady) {
     ytPlayVideo(resolved.id)
+    void prefetchUpcoming()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Préchargement : résout les vidéoId YouTube des titres à venir pendant que
+// le titre courant joue, pour que « suivant » / « précédent » soient quasi
+// instantanés (le vidéoId est déjà en cache, plus de recherche à l'appui).
+// ---------------------------------------------------------------------------
+
+let prefetching = false
+
+async function prefetchUpcoming(): Promise<void> {
+  const { queue, index, shuffle } = usePlayer.getState()
+  if (!queue.length || prefetching) return
+  prefetching = true
+  try {
+    // Enchaînement normal : on précharge les 2 suivants dans l'ordre.
+    // En mode aléatoire : on précharge un petit lot tournant de titres
+    // distincts pour maximiser la probabilité de tomber sur un déjà-caché.
+    const targets: Track[] = []
+    if (shuffle) {
+      const seen = new Set<number>()
+      for (let k = 0; k < queue.length && targets.length < 3; k++) {
+        const i = randomOtherIndex(index, queue.length)
+        if (seen.has(i)) continue
+        seen.add(i)
+        targets.push(queue[i]!)
+      }
+    } else {
+      for (let k = 1; k <= 2; k++) targets.push(queue[(index + k) % queue.length]!)
+    }
+    await Promise.allSettled(targets.map((t) => resolveVideoId(t)))
+  } finally {
+    prefetching = false
   }
 }
 
