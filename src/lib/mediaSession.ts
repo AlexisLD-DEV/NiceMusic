@@ -1,9 +1,9 @@
 import type { Track } from './types'
 
 /**
- * Media Session API : contrôles play/pause/précédent/suivant sur l'écran
+ * Media Session API : contrôles play/pause/précédent/suivant/seek sur l'écran
  * verrouillé Android (et dans le centre de notifications), pendant que la
- * musique tourne. À appeler une fois au montage de l'app.
+ * musique tourne — dans les deux modes de lecture (YouTube et audio Invidious).
  */
 export function setupMediaSession(handlers: {
   onPlay: () => void
@@ -44,8 +44,32 @@ export function updateMediaSession(track: Track): void {
         }
       ]
     })
-    navigator.mediaSession.playbackState = 'paused'
   } catch {
     /* ignoré */
+  }
+}
+
+/** Met à jour l'état de lecture (playing/paused) sur l'écran verrouillé. */
+export function setMediaSessionPlaybackState(state: 'playing' | 'paused'): void {
+  if (!('mediaSession' in navigator)) return
+  try {
+    navigator.mediaSession.playbackState = state
+  } catch {
+    /* ignoré */
+  }
+}
+
+/** Met à jour la position (progression) sur l'écran verrouillé. */
+export function updateMediaSessionPosition(position: number, duration: number): void {
+  if (!('mediaSession' in navigator)) return
+  if (duration <= 0 || !Number.isFinite(position) || !Number.isFinite(duration)) return
+  try {
+    navigator.mediaSession.setPositionState({
+      duration,
+      playbackRate: 1,
+      position: Math.min(position, duration)
+    })
+  } catch {
+    /* non supporté / état invalide : ignoré */
   }
 }

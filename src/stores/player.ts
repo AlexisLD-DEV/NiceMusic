@@ -13,7 +13,11 @@ import {
   type YTPlaybackState
 } from '../lib/ytPlayer'
 import type { Track } from '../lib/types'
-import { updateMediaSession } from '../lib/mediaSession'
+import {
+  setMediaSessionPlaybackState,
+  updateMediaSession,
+  updateMediaSessionPosition
+} from '../lib/mediaSession'
 
 /**
  * Store du lecteur — deux backends de lecture :
@@ -81,6 +85,24 @@ let lastHistoryWrite = 0
 const mapCache = new Map<string, Track>()
 let mappingsLoaded = false
 
+/** Version du cache de mappings (pour re-rendre les listes quand il change). */
+const useMappingsVersion = create<{ v: number; bump: () => void }>()((set) => ({
+  v: 0,
+  bump: () => set((s) => ({ v: s.v + 1 }))
+}))
+
+/** Version du cache de mappings (hook UI : miniatures des titres mappés). */
+export function useMappingsVersionValue(): number {
+  return useMappingsVersion((s) => s.v)
+}
+
+/** Enrichit un titre non mappé avec sa résolution YouTube mise en cache (si dispo). */
+export function getMappedTrack(track: Track): Track {
+  if (!track.unmapped) return track
+  const cached = mapCache.get(track.id)
+  return cached?.id ? { ...track, ...cached, unmapped: false } : track
+}
+
 async function loadMappings(): Promise<void> {
   if (mappingsLoaded) return
   mappingsLoaded = true
@@ -89,6 +111,7 @@ async function loadMappings(): Promise<void> {
     for (const [key, value] of Object.entries(mappings)) {
       if (value && value.id) mapCache.set(key, value as Track)
     }
+    useMappingsVersion.getState().bump()
   } catch {
     /* hors ligne : on cherchera à chaque fois */
   }
@@ -157,6 +180,7 @@ async function resolveVideoId(track: Track): Promise<Track> {
     unmapped: false
   }
   mapCache.set(track.id, resolved)
+  useMappingsVersion.getState().bump()
   void saveMapping(track.id, resolved)
   return resolved
 }
@@ -327,16 +351,17 @@ if (audio) {
       currentTime: audio.currentTime,
       duration: audio.duration && Number.isFinite(audio.duration) ? audio.duration : 0
     })
+    updateMediaSessionPosition(audio.currentTime, audio.duration || 0)
     const { current } = usePlayer.getState()
     if (current && audio.currentTime >= 20) void recordHistory(current)
   })
   audio.addEventListener('play', () => {
     usePlayer.setState({ isPlaying: true, loading: false })
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
+    setMediaSessionPlaybackState('playing')
   })
   audio.addEventListener('pause', () => {
     usePlayer.setState({ isPlaying: false })
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
+    setMediaSessionPlaybackState('paused')
   })
   audio.addEventListener('error', onAudioError)
 }
@@ -355,6 +380,7 @@ function startYtPoll(): void {
     const t = ytCurrentTime()
     const d = ytDuration()
     usePlayer.setState({ currentTime: t, duration: d })
+    updateMediaSessionPosition(t, d)
     const { current } = usePlayer.getState()
     if (current && t >= 20) void recordHistory(current)
   }, 500)
@@ -388,6 +414,8 @@ function ytFallbackToAudio(): void {
 async function playYtTrack(track: Track): Promise<void> {
   const resolved = await resolveVideoId(track)
   usePlayer.setState({ current: resolved, error: null, isPlaying: false, loading: true })
+  // Métadonnées + contrôles sur l'écran verrouillé (play/pause/précédent/suivant)
+  updateMediaSession(resolved)
 
   try {
     if (!ytReady) {
@@ -404,9 +432,11 @@ async function playYtTrack(track: Track): Promise<void> {
         onStateChange: (state: YTPlaybackState) => {
           if (state === 1) {
             usePlayer.setState({ isPlaying: true, loading: false })
+            setMediaSessionPlaybackState('playing')
             startYtPoll()
           } else if (state === 2) {
             usePlayer.setState({ isPlaying: false })
+            setMediaSessionPlaybackState('paused')
             stopYtPoll()
           } else if (state === 0) {
             stopYtPoll()

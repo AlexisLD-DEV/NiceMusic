@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Track } from '../lib/types'
 import { useFavorites, usePlaylists } from '../api/queries'
-import { usePlayer } from '../stores/player'
+import { getMappedTrack, useMappingsVersionValue, usePlayer } from '../stores/player'
 import { formatDuration } from '../lib/utils'
 import {
   CheckIcon,
@@ -36,6 +36,9 @@ export function TrackList({
   onRemove,
   onPlay
 }: Props) {
+  // Re-rend quand le cache de mapping Deezer→YouTube se remplit (miniatures)
+  useMappingsVersionValue()
+
   const queue = playQueue ?? tracks
 
   if (tracks.length === 0) {
@@ -76,13 +79,15 @@ function TrackRow({
   const { current, isPlaying } = usePlayer()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const isCurrent = current?.id === track.id && !track.unmapped
+  // Affichage enrichi : si le titre Deezer a été mappé, on montre la version YouTube
+  const t = getMappedTrack(track)
+  const isCurrent = current?.id === t.id
 
   return (
     <li className="relative flex items-center gap-3 px-4 py-2">
-      <button onClick={onPlay} className="group relative shrink-0" aria-label={`Lire ${track.title}`}>
-        {track.thumbnail ? (
-          <img src={track.thumbnail} alt="" className="h-11 w-11 rounded-md object-cover" loading="lazy" />
+      <button onClick={onPlay} className="group relative shrink-0" aria-label={`Lire ${t.title}`}>
+        {t.thumbnail ? (
+          <img src={t.thumbnail} alt="" className="h-11 w-11 rounded-md object-cover" loading="lazy" />
         ) : (
           <div className="flex h-11 w-11 items-center justify-center rounded-md bg-surface2 text-muted">
             <MusicIcon width={20} height={20} />
@@ -98,13 +103,13 @@ function TrackRow({
       </button>
 
       <button onClick={onPlay} className="min-w-0 flex-1 text-left">
-        <p className={`truncate text-sm ${isCurrent ? 'text-accent' : ''}`}>{track.title}</p>
+        <p className={`truncate text-sm ${isCurrent ? 'text-accent' : ''}`}>{t.title}</p>
         <p className="flex items-center gap-1.5 truncate text-xs text-muted">
-          {track.unmapped && (
+          {track.unmapped && t.unmapped && (
             <span className="rounded bg-surface2 px-1 py-px text-[9px] uppercase tracking-wide text-muted">Deezer</span>
           )}
-          {track.author}
-          {track.duration ? <span className="tabular-nums">· {formatDuration(track.duration)}</span> : null}
+          {t.author}
+          {t.duration ? <span className="tabular-nums">· {formatDuration(t.duration)}</span> : null}
         </p>
       </button>
 

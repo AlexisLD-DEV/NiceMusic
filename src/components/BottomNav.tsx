@@ -2,22 +2,22 @@ import { NavLink } from 'react-router-dom'
 import { HistoryIcon, HeartIcon, ListIcon, SearchIcon, SettingsIcon } from './icons'
 
 const items = [
-  { to: '/', label: 'Accueil', icon: SearchIcon },
-  { to: '/favorites', label: 'Favoris', icon: HeartIcon },
-  { to: '/playlists', label: 'Playlists', icon: ListIcon },
-  { to: '/history', label: 'Historique', icon: HistoryIcon },
-  { to: '/settings', label: 'Réglages', icon: SettingsIcon }
+  { to: '/', label: 'Favoris', icon: HeartIcon, end: true },
+  { to: '/search', label: 'Recherche', icon: SearchIcon, end: true },
+  { to: '/playlists', label: 'Playlists', icon: ListIcon, end: false },
+  { to: '/history', label: 'Historique', icon: HistoryIcon, end: false },
+  { to: '/settings', label: 'Réglages', icon: SettingsIcon, end: false }
 ]
 
 export function BottomNav() {
   return (
     <nav className="safe-bottom border-t border-border bg-surface">
       <div className="flex">
-        {items.map(({ to, label, icon: Icon }) => (
+        {items.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end={end}
             className={({ isActive }) =>
               `flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[10px] transition-colors ${
                 isActive ? 'text-accent' : 'text-muted'

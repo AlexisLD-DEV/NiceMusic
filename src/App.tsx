@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { BottomNav } from './components/BottomNav'
 import { PlayerBar } from './components/PlayerBar'
 import Home from './pages/Home'
@@ -14,13 +14,14 @@ export default function App() {
       {/* Zone défilante */}
       <main className="flex-1 overflow-y-auto">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Favorites />} />
+          <Route path="/search" element={<Home />} />
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/history" element={<History />} />
           <Route path="/playlists" element={<Playlists />} />
           <Route path="/playlists/:id" element={<PlaylistDetail />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Home />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
