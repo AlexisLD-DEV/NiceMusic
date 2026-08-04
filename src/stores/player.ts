@@ -271,6 +271,9 @@ async function playYtTrack(track: Track): Promise<void> {
     await createYTPlayer(el, {
       onReady: () => {
         ytReady = true
+        // Le player n'est fonctionnel qu'ici : applique le volume courant,
+        // puis lance la vidéo en attente (si le tap a eu lieu pendant le chargement).
+        ytSetVolume(usePlayer.getState().volume)
         if (ytPending) {
           ytPlayVideo(ytPending)
           ytPending = null
@@ -294,8 +297,6 @@ async function playYtTrack(track: Track): Promise<void> {
         usePlayer.setState({ isPlaying: false, loading: false, error: ytError() })
       }
     })
-    // Applique le volume courant au lecteur YouTube
-    ytSetVolume(usePlayer.getState().volume)
   }
   ytPending = resolved.id
   if (ytReady) {

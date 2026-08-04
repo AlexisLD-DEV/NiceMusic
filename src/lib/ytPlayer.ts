@@ -14,6 +14,9 @@ let player: YT.Player | null = null
 let containerEl: HTMLElement | null = null
 let apiLoaded = false
 let apiLoading: Promise<void> | null = null
+/** true quand onReady s'est déclenché : seul moment où les méthodes
+ *  du player (setVolume, playVideo…) sont garanties d'exister. */
+let playerReady = false
 
 declare global {
   interface Window {
@@ -62,9 +65,30 @@ export async function createYTPlayer(el: HTMLElement, callbacks: YTPlayerCallbac
   containerEl = el
   await loadApi()
   if (player) {
-    player.destroy()
+    try {
+      player.destroy()
+    } catch {
+      /* objet factice déjà invalide */
+    }
     player = null
   }
+  // Filet de sécurité : si onReady ne se déclenche jamais (iframe YouTube
+  // bloquée, réseau très lent), on abandonne au lieu de rester sur
+  // « Chargement… » pour toujours.
+  const readyTimer = window.setTimeout(() => {
+    if (!playerReady) {
+      try {
+        player?.destroy()
+      } catch {
+        /* ignoré */
+      }
+      player = null
+      playerReady = false
+      callbacks.onError?.(2)
+    }
+  }, 15_000)
+
+  playerReady = false
   player = new YT.Player(el, {
     width: '100%',
     height: '100%',
@@ -79,7 +103,11 @@ export async function createYTPlayer(el: HTMLElement, callbacks: YTPlayerCallbac
       origin: window.location.origin
     },
     events: {
-      onReady: () => callbacks.onReady?.(),
+      onReady: () => {
+        window.clearTimeout(readyTimer)
+        playerReady = true
+        callbacks.onReady?.()
+      },
       onStateChange: (e: YT.OnStateChangeEvent) => callbacks.onStateChange?.(e.data as YTPlaybackState),
       onError: (e: YT.OnErrorEvent) => callbacks.onError?.(e.data)
     }
@@ -96,33 +124,42 @@ export function ytPlayVideo(id: string): void {
 }
 
 export function ytPause(): void {
-  player?.pauseVideo()
+  if (player && typeof player.pauseVideo === 'function') player.pauseVideo()
 }
 
 export function ytResume(): void {
-  player?.playVideo()
+  if (player && typeof player.playVideo === 'function') player.playVideo()
 }
 
 export function ytSeek(time: number): void {
-  player?.seekTo(time, true)
+  if (player && typeof player.seekTo === 'function') player.seekTo(time, true)
 }
 
 /** Volume 0..1 → setVolume(0..100) du lecteur YouTube. */
 export function ytSetVolume(v: number): void {
-  player?.setVolume(Math.round(Math.min(1, Math.max(0, v)) * 100))
+  if (player && typeof player.setVolume === 'function') {
+    player.setVolume(Math.round(Math.min(1, Math.max(0, v)) * 100))
+  }
 }
 
 export function ytCurrentTime(): number {
-  return player?.getCurrentTime() ?? 0
+  if (player && typeof player.getCurrentTime === 'function') return player.getCurrentTime()
+  return 0
 }
 
 export function ytDuration(): number {
-  return player?.getDuration() ?? 0
+  if (player && typeof player.getDuration === 'function') return player.getDuration()
+  return 0
 }
 
 export function destroyYTPlayer(): void {
-  player?.destroy()
+  try {
+    player?.destroy()
+  } catch {
+    /* objet factice déjà invalide */
+  }
   player = null
+  playerReady = false
   containerEl = null
 }
 
