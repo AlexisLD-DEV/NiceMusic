@@ -26,7 +26,7 @@ export default function Home() {
   return (
     <div className="safe-top px-4 pb-6 pt-4">
       <header className="mb-4">
-        <h1 className="text-2xl font-bold tracking-tight">NiceMusic</h1>
+        <h1 className="text-gradient text-2xl font-bold tracking-tight">NiceMusic</h1>
         <p className="text-sm text-muted">Cherchez, écoutez, retrouvez — partout.</p>
       </header>
 

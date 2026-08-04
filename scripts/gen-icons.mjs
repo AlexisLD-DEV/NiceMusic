@@ -13,9 +13,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT = join(__dirname, '..', 'public', 'icons')
 
-const BG = [15, 15, 20] // #0f0f14
-const ACCENT = [255, 90, 121] // #ff5a79
-const WHITE = [242, 242, 245]
+const BG = [10, 10, 10] // #0a0a0a
+const ACCENT = [162, 56, 255] // #a238ff (violet Deezer)
+const WHITE = [245, 245, 247]
 
 // ---------------------------------------------------------------------------
 // PNG encoder minimal

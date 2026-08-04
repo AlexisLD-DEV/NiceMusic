@@ -107,6 +107,11 @@ export function ytSeek(time: number): void {
   player?.seekTo(time, true)
 }
 
+/** Volume 0..1 → setVolume(0..100) du lecteur YouTube. */
+export function ytSetVolume(v: number): void {
+  player?.setVolume(Math.round(Math.min(1, Math.max(0, v)) * 100))
+}
+
 export function ytCurrentTime(): number {
   return player?.getCurrentTime() ?? 0
 }

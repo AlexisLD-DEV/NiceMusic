@@ -1,17 +1,20 @@
 import { useState } from 'react'
 import { usePlayer, YT_PLAYER_ID } from '../stores/player'
 import { formatDuration } from '../lib/utils'
-import { MusicIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, CloseIcon } from './icons'
+import { MusicIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, CloseIcon, VolumeIcon, VolumeMuteIcon } from './icons'
 
 /** Barre de lecture persistante, au-dessus de la navigation. */
 export function PlayerBar() {
-  const { current, isPlaying, loading, currentTime, duration, error, queue, index, mode } = usePlayer()
+  const { current, isPlaying, loading, currentTime, duration, error, queue, index, mode, volume, setVolume } =
+    usePlayer()
   const [showVideo, setShowVideo] = useState(false)
+  const [volOpen, setVolOpen] = useState(false)
 
   if (!current) return null
 
   const max = duration || 0
   const isYoutube = mode === 'youtube'
+  const muted = volume <= 0.01
 
   return (
     <div className="relative border-t border-border bg-surface px-3 pb-1.5 pt-2">
@@ -38,6 +41,29 @@ export function PlayerBar() {
         </div>
       )}
 
+      {/* Popover volume */}
+      {volOpen && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setVolOpen(false)} aria-hidden="true" />
+          <div className="absolute -top-14 right-2 z-30 flex items-center gap-2 rounded-xl border border-border bg-surface2 px-3 py-2 shadow-xl">
+            {muted ? (
+              <VolumeMuteIcon width={18} height={18} className="shrink-0 text-muted" />
+            ) : (
+              <VolumeIcon width={18} height={18} className="shrink-0 text-muted" />
+            )}
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(volume * 100)}
+              onChange={(e) => setVolume(Number(e.target.value) / 100)}
+              className="player-range w-28"
+              aria-label="Volume"
+            />
+          </div>
+        </>
+      )}
+
       {error ? (
         <p className="mb-1 truncate text-xs text-red-400">{error}</p>
       ) : loading ? (
@@ -53,9 +79,19 @@ export function PlayerBar() {
           </div>
         )}
 
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium leading-tight">{current.title}</p>
-          <p className="truncate text-xs text-muted">{current.author}</p>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium leading-tight">{current.title}</p>
+            <p className="truncate text-xs text-muted">{current.author}</p>
+          </div>
+          {isPlaying && (
+            <div className="eq shrink-0" aria-label="En lecture">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+          )}
         </div>
 
         {queue.length > 1 && (
@@ -68,13 +104,21 @@ export function PlayerBar() {
           <button
             onClick={() => setShowVideo((v) => !v)}
             className={`shrink-0 rounded-full border border-border px-2.5 py-1 text-[10px] transition active:scale-95 ${
-              showVideo ? 'bg-accent text-white' : 'bg-surface2 text-muted'
+              showVideo ? 'btn-accent text-white' : 'bg-surface2 text-muted'
             }`}
             aria-label={showVideo ? 'Masquer la vidéo' : 'Afficher la vidéo'}
           >
             {showVideo ? 'Vidéo ✓' : 'Vidéo'}
           </button>
         )}
+
+        <button
+          onClick={() => setVolOpen((v) => !v)}
+          className="shrink-0 rounded-full p-1.5 text-muted transition active:scale-90"
+          aria-label="Volume"
+        >
+          {muted ? <VolumeMuteIcon width={20} height={20} /> : <VolumeIcon width={20} height={20} />}
+        </button>
 
         <div className="flex shrink-0 items-center gap-1.5">
           <button
@@ -86,7 +130,7 @@ export function PlayerBar() {
           </button>
           <button
             onClick={() => void usePlayer.getState().toggle()}
-            className="rounded-full bg-accent p-2 text-white transition active:scale-90"
+            className="btn-accent rounded-full p-2 text-white transition active:scale-90"
             aria-label={isPlaying ? 'Pause' : 'Lecture'}
           >
             {isPlaying ? <PauseIcon width={22} height={22} /> : <PlayIcon width={22} height={22} />}

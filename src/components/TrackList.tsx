@@ -103,7 +103,17 @@ function TrackRow({
       </button>
 
       <button onClick={onPlay} className="min-w-0 flex-1 text-left">
-        <p className={`truncate text-sm ${isCurrent ? 'text-accent' : ''}`}>{t.title}</p>
+        <p className={`flex items-center gap-1.5 ${isCurrent ? 'text-accent' : ''}`}>
+          {isCurrent && isPlaying && (
+            <span className="eq shrink-0" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+            </span>
+          )}
+          <span className="truncate text-sm">{t.title}</span>
+        </p>
         <p className="flex items-center gap-1.5 truncate text-xs text-muted">
           {track.unmapped && t.unmapped && (
             <span className="rounded bg-surface2 px-1 py-px text-[9px] uppercase tracking-wide text-muted">Deezer</span>
@@ -116,7 +126,7 @@ function TrackRow({
       {showFavorites && (
         <button
           onClick={() => toggleFavorite(track)}
-          className={`shrink-0 p-1.5 transition active:scale-90 ${isFavorite(track.id) ? 'text-accent' : 'text-muted'}`}
+          className={`shrink-0 p-1.5 transition active:scale-90 ${isFavorite(track.id) ? 'text-accent2' : 'text-muted'}`}
           aria-label={isFavorite(track.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}
         >
           {isFavorite(track.id) ? <HeartFilledIcon width={20} height={20} /> : <HeartIcon width={20} height={20} />}

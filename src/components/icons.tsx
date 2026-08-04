@@ -141,3 +141,18 @@ export const CloseIcon = (p: P) => (
     <path d="M6 6l12 12M18 6 6 18" />
   </Svg>
 )
+
+export const VolumeIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M11 5 6.5 9H3v6h3.5L11 19Z" fill="currentColor" stroke="none" />
+    <path d="M14.5 9.5a4.2 4.2 0 0 1 0 5" />
+    <path d="M17 7a7.5 7.5 0 0 1 0 10" />
+  </Svg>
+)
+
+export const VolumeMuteIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M11 5 6.5 9H3v6h3.5L11 19Z" fill="currentColor" stroke="none" />
+    <path d="m15 9 6 6M21 9l-6 6" />
+  </Svg>
+)

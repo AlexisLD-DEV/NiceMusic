@@ -10,6 +10,7 @@ import {
   ytPlayVideo,
   ytResume,
   ytSeek,
+  ytSetVolume,
   type YTPlaybackState
 } from '../lib/ytPlayer'
 import type { Track } from '../lib/types'
@@ -34,6 +35,7 @@ import {
 export type PlaybackMode = 'youtube' | 'audio'
 
 const MODE_KEY = 'nicemusic.mode'
+const VOLUME_KEY = 'nicemusic.volume'
 
 function initialMode(): PlaybackMode {
   try {
@@ -43,6 +45,16 @@ function initialMode(): PlaybackMode {
   }
 }
 
+function initialVolume(): number {
+  try {
+    const v = Number(localStorage.getItem(VOLUME_KEY))
+    if (Number.isFinite(v) && v >= 0 && v <= 1) return v
+  } catch {
+    /* défaut */
+  }
+  return 0.8
+}
+
 // ---------------------------------------------------------------------------
 // Élément audio unique (backend 'audio')
 // ---------------------------------------------------------------------------
@@ -50,6 +62,7 @@ function initialMode(): PlaybackMode {
 const audio: HTMLAudioElement | null = typeof window !== 'undefined' ? new Audio() : null
 if (audio) {
   audio.preload = 'auto'
+  audio.volume = initialVolume()
 }
 
 interface PlayerState {
@@ -62,6 +75,8 @@ interface PlayerState {
   currentTime: number
   duration: number
   error: string | null
+  volume: number
+  setVolume: (v: number) => void
   mode: PlaybackMode
   setMode: (mode: PlaybackMode) => void
   play: (track: Track, queue?: Track[]) => Promise<void>
@@ -445,6 +460,8 @@ async function playYtTrack(track: Track): Promise<void> {
         },
         onError: () => ytFallbackToAudio()
       })
+      // Applique le volume courant au lecteur YouTube
+      ytSetVolume(usePlayer.getState().volume)
     }
     ytPending = resolved.id
     if (ytReady) {
@@ -502,7 +519,20 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   currentTime: 0,
   duration: 0,
   error: null,
+  volume: initialVolume(),
   mode: initialMode(),
+
+  setVolume(v) {
+    const clamped = Math.min(1, Math.max(0, v))
+    try {
+      localStorage.setItem(VOLUME_KEY, String(clamped))
+    } catch {
+      /* ignoré */
+    }
+    set({ volume: clamped })
+    if (audio) audio.volume = clamped
+    ytSetVolume(clamped)
+  },
 
   setMode(mode) {
     if (get().mode === mode) return
