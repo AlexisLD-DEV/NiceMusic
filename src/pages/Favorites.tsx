@@ -1,17 +1,21 @@
 import { useEffect } from 'react'
-import { useFavorites } from '../api/queries'
+import { useFavorites, useHistory } from '../api/queries'
 import { TrackList } from '../components/TrackList'
 import { startFavoritesBackfill, usePlayer } from '../stores/player'
 import { ShuffleIcon } from '../components/icons'
 
-/** Page principale : les favoris, avec lecture aléatoire en une touche. */
+/**
+ * Page d'accueil, façon Deezer : une section « Favoris » (avec lecture
+ * aléatoire) puis une section « Récemment écoutés ».
+ */
 export default function Favorites() {
   const { query, toggleFavorite } = useFavorites()
+  const history = useHistory()
   const tracks = query.data?.tracks ?? []
+  const recents = history.query.data?.tracks ?? []
 
   // Pré-mappe progressivement les favoris (résout leurs vidéoId YouTube en
-  // arrière-plan) pour rendre la lecture / le shuffle plus rapides au fil
-  // du temps — une seule fois tant que la liste est chargée.
+  // arrière-plan) — une seule fois une fois la liste chargée.
   useEffect(() => {
     if (tracks.length > 0) startFavoritesBackfill(tracks)
   }, [tracks])
@@ -26,7 +30,7 @@ export default function Favorites() {
 
   return (
     <div className="safe-top px-4 pb-6 pt-4">
-      <header className="mb-3">
+      <header className="mb-4">
         <h1 className="text-2xl font-bold tracking-tight">Favoris</h1>
         <p className="text-sm text-muted">{tracks.length} titre(s) enregistré(s).</p>
       </header>
@@ -43,14 +47,38 @@ export default function Favorites() {
         </button>
       )}
 
-      <TrackList
-        tracks={tracks}
-        emptyMessage="Aucun favori. Touchez le cœur sur un titre (recherche) pour le garder ici."
-        playQueue={tracks}
-        showFavorites={false}
-        showAddToPlaylist
-        onRemove={(t) => toggleFavorite(t)}
-      />
+      {/* Section : tous les favoris */}
+      <section className="mb-6">
+        {tracks.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-muted">
+            Aucun favori. Touchez le cœur sur un titre (recherche) pour le garder ici.
+          </p>
+        ) : (
+          <TrackList
+            tracks={tracks}
+            playQueue={tracks}
+            showFavorites={false}
+            showAddToPlaylist
+            onRemove={(t) => toggleFavorite(t)}
+          />
+        )}
+      </section>
+
+      {/* Section : récemment écoutés */}
+      {recents.length > 0 && (
+        <section>
+          <h2 className="mb-1 px-4 text-sm font-semibold uppercase tracking-wide text-muted">
+            Récemment écoutés
+          </h2>
+          <TrackList
+            tracks={recents.slice(0, 20)}
+            emptyMessage=""
+            playQueue={recents}
+            showFavorites={false}
+            showAddToPlaylist
+          />
+        </section>
+      )}
     </div>
   )
 }

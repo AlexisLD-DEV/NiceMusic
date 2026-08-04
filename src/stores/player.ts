@@ -258,6 +258,11 @@ function stopYtPoll(): void {
 
 const YT_PLAYER_ID = 'yt-player-container'
 
+/** Nombre max d'erreurs youtube consécutives avant de stopper (évite la boucle). */
+const MAX_CONSECUTIVE_ERRORS = 3
+/** Vidéos qui échouent d'affilée (reset dès qu'une vidéo démarre). */
+let consecutiveErrors = 0
+
 function ytError(): string {
   return 'Lecture impossible sur YouTube pour le moment. Réessayez dans quelques secondes.'
 }
@@ -294,6 +299,8 @@ async function playYtTrack(track: Track): Promise<void> {
       },
       onStateChange: (state: YTPlaybackState) => {
         if (state === 1) {
+          // Une vidéo a démarré : réinitialise le compteur d'erreurs consécutives
+          consecutiveErrors = 0
           usePlayer.setState({ isPlaying: true, loading: false })
           setMediaSessionPlaybackState('playing')
           startYtPoll()
@@ -308,7 +315,17 @@ async function playYtTrack(track: Track): Promise<void> {
         }
       },
       onError: () => {
-        usePlayer.setState({ isPlaying: false, loading: false, error: ytError() })
+        // Vidéo bloquée / supprimée / geoblock : on passe automatiquement au
+        // titre suivant, sauf si trop de titres consécutifs échouent (évite de
+        // boucler indéfiniment sur une file entièrement inaccessible).
+        consecutiveErrors++
+        usePlayer.setState({ isPlaying: false, loading: false })
+        if (consecutiveErrors <= MAX_CONSECUTIVE_ERRORS) {
+          usePlayer.getState().next()
+        } else {
+          usePlayer.setState({ error: ytError() })
+          consecutiveErrors = 0
+        }
       }
     })
   }
