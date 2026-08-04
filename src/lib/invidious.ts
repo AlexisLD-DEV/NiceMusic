@@ -33,6 +33,13 @@ export const COMPANIONS: string[] = [
 /** index de la dernière instance qui a répondu (rotation recherche). */
 let lastGood = -1
 
+// Cache en mémoire des recherches récentes (recherche → titres), pour relancer
+// une même recherche quasi instantanément sans repasser par le relais.
+const searchCache = new Map<string, Track[]>()
+
+/** Taille max du cache mémoire (évite de tout garder indéfiniment). */
+const SEARCH_CACHE_MAX = 50
+
 interface InvidiousItem {
   type?: string
   videoId?: string
@@ -86,6 +93,22 @@ export async function searchTracks(q: string): Promise<Track[]> {
   const query = q.trim()
   if (!query) return []
 
+  // 1) Cache mémoire : si déjà recherché, on renvoie immédiatement.
+  const cached = searchCache.get(query)
+  if (cached) return cached
+
+  const found = await doSearch(query)
+
+  // Mémorise la recherche (avec une petite éviction FIFO pour borner la taille).
+  if (searchCache.size >= SEARCH_CACHE_MAX) {
+    const firstKey = searchCache.keys().next().value
+    if (firstKey !== undefined) searchCache.delete(firstKey)
+  }
+  searchCache.set(query, found)
+  return found
+}
+
+async function doSearch(query: string): Promise<Track[]> {
   // 1) Via le relais Jina (IP non bloquées, CORS ouvert)
   for (let i = 0; i < INSTANCES.length; i++) {
     const idx = (lastGood + 1 + i) % INSTANCES.length

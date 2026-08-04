@@ -1,12 +1,20 @@
+import { useEffect } from 'react'
 import { useFavorites } from '../api/queries'
 import { TrackList } from '../components/TrackList'
-import { usePlayer } from '../stores/player'
+import { startFavoritesBackfill, usePlayer } from '../stores/player'
 import { ShuffleIcon } from '../components/icons'
 
 /** Page principale : les favoris, avec lecture aléatoire en une touche. */
 export default function Favorites() {
   const { query, toggleFavorite } = useFavorites()
   const tracks = query.data?.tracks ?? []
+
+  // Pré-mappe progressivement les favoris (résout leurs vidéoId YouTube en
+  // arrière-plan) pour rendre la lecture / le shuffle plus rapides au fil
+  // du temps — une seule fois tant que la liste est chargée.
+  useEffect(() => {
+    if (tracks.length > 0) startFavoritesBackfill(tracks)
+  }, [tracks])
 
   /** Active le mode aléatoire et lance la lecture sur tous les favoris. */
   const shufflePlay = (): void => {

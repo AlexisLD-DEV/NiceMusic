@@ -362,6 +362,35 @@ function randomOtherIndex(current: number, length: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Pré-mapping progressif des favoris
+// ---------------------------------------------------------------------------
+
+let backfillStarted = false
+let backfillInFlight = false
+
+/**
+ * Résout en arrière-plan le vidéoId YouTube des titres non mappés, par petits
+ * lots (respectueux du quota KV et du relais). Appelé une fois au chargement :
+ * au fil du temps, tous les favoris finissent mappés → shuffle / lecture
+ * deviennent plus rapides sans passer par une recherche au moment de jouer.
+ */
+export function startFavoritesBackfill(tracks: Track[]): void {
+  if (backfillStarted) return
+  backfillStarted = true
+  void (async () => {
+    const unmapped = tracks.filter((t) => t.unmapped)
+    for (let i = 0; i < unmapped.length; i += 3) {
+      if (backfillInFlight) continue
+      backfillInFlight = true
+      const batch = unmapped.slice(i, i + 3)
+      await Promise.allSettled(batch.map((t) => resolveVideoId(t)))
+      backfillInFlight = false
+    }
+  })()
+}
+
+
+// ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
