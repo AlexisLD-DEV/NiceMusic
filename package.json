@@ -11,7 +11,8 @@
     "gen:icons": "node scripts/gen-icons.mjs",
     "deploy:pages": "wrangler pages deploy dist --project-name nicemusic",
     "worker:dev": "wrangler dev --config worker/wrangler.toml --port 8787",
-    "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
+    "worker:deploy": "wrangler deploy --config worker/wrangler.toml",
+    "deploy": "pnpm build && npx wrangler pages deploy dist --project-name nicemusic --branch main"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",

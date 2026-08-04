@@ -2,14 +2,18 @@ import type { FavoritesBlob, HistoryBlob, Playlist, PlaylistsBlob, SettingsBlob,
 
 /**
  * Client API — appelle le Worker Cloudflare.
- * En dev : VITE_API_BASE absent → '/api' (proxifié par Vite vers wrangler dev).
- * En prod : VITE_API_BASE = origine du Worker (ex. https://nicemusic-api.xxx.workers.dev),
- * on y ajoute '/api' — les routes du Worker sont sous /api/*.
+ * En dev : '/api' (proxifié par Vite vers wrangler dev, port 8787).
+ * En prod : VITE_API_BASE si fourni, sinon origine du Worker (fallback
+ * intégré — aucune variable d'environnement requise au build).
  *
  * Sans preflight CORS : GET sans en-tête, écritures en POST avec un corps
  * text/plain (safelisted) — le Worker parse le JSON via request.json().
  */
-const BASE = `${import.meta.env.VITE_API_BASE ?? ''}/api`
+const BASE = import.meta.env.VITE_API_BASE
+  ? `${import.meta.env.VITE_API_BASE}/api`
+  : import.meta.env.DEV
+    ? '/api'
+    : 'https://nicemusic-api.alexisledeunf.workers.dev/api'
 
 export class ApiError extends Error {
   status: number
