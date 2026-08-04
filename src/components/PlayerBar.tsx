@@ -4,7 +4,7 @@ import { MusicIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons'
 
 /** Barre de lecture persistante, au-dessus de la navigation. */
 export function PlayerBar() {
-  const { current, isPlaying, currentTime, duration, error, queue, index } = usePlayer()
+  const { current, isPlaying, loading, currentTime, duration, error, queue, index } = usePlayer()
 
   if (!current) return null
 
@@ -12,7 +12,11 @@ export function PlayerBar() {
 
   return (
     <div className="border-t border-border bg-surface px-3 pb-1.5 pt-2">
-      {error && <p className="mb-1 truncate text-xs text-red-400">{error}</p>}
+      {error ? (
+        <p className="mb-1 truncate text-xs text-red-400">{error}</p>
+      ) : loading ? (
+        <p className="mb-1 text-xs text-muted">Chargement…</p>
+      ) : null}
       <div className="flex items-center gap-3">
         {current.thumbnail ? (
           <img src={current.thumbnail} alt="" className="h-11 w-11 rounded-md object-cover" loading="lazy" />

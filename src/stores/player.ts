@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { getHistory, putHistory } from '../api/client'
+import { getHistory, getMappings, putHistory, putMappings } from '../api/client'
 import { listStreamCandidates, searchTracks } from '../lib/invidious'
 import type { Track } from '../lib/types'
 import { updateMediaSession } from '../lib/mediaSession'
@@ -10,6 +10,11 @@ import { updateMediaSession } from '../lib/mediaSession'
  * Le stream audio est lu en direct depuis l'instance Invidious via un élément
  * <audio> unique (module-level) : la lecture continue quand l'écran se verrouille,
  * et les contrôles passent par la Media Session API (voir mediaSession.ts).
+ *
+ * Performance : les sources de flux sont sondées EN PARALLÈLE (quelques
+ * secondes max) au lieu d'être essayées une par une ; le mapping
+ * Deezer→YouTube est mis en cache (KV) pour ne relancer une recherche YouTube
+ * qu'une seule fois par titre.
  */
 
 // ---------------------------------------------------------------------------
@@ -26,6 +31,8 @@ interface PlayerState {
   index: number
   current: Track | null
   isPlaying: boolean
+  /** true pendant la résolution (recherche YouTube / sondage des sources) */
+  loading: boolean
   currentTime: number
   duration: number
   error: string | null
@@ -37,18 +44,88 @@ interface PlayerState {
   stop: () => void
 }
 
-let streamCandidates: string[] = []
-let candidateIndex = 0
 let currentTryingUrl = ''
+let remainingCandidates: string[] = []
 let lastRecordedId: string | null = null
+/** moment de la dernière écriture d'historique (debounce anti-quota) */
+let lastHistoryWrite = 0
 
-/** Recherche YouTube pour un titre non mappé (issu de l'export Deezer). */
+// ---------------------------------------------------------------------------
+// Cache de mapping Deezer→YouTube (in-memory + KV)
+// ---------------------------------------------------------------------------
+
+const mapCache = new Map<string, Track>()
+let mappingsLoaded = false
+
+async function loadMappings(): Promise<void> {
+  if (mappingsLoaded) return
+  mappingsLoaded = true
+  try {
+    const { mappings } = await getMappings()
+    for (const [key, value] of Object.entries(mappings)) {
+      if (value && value.id) mapCache.set(key, value as Track)
+    }
+  } catch {
+    /* hors ligne : on cherchera à chaque fois */
+  }
+}
+
+async function saveMapping(key: string, resolved: Track): Promise<void> {
+  pendingMappings.set(key, {
+    id: resolved.id,
+    title: resolved.title,
+    author: resolved.author,
+    duration: resolved.duration,
+    thumbnail: resolved.thumbnail
+  })
+  scheduleMappingsFlush()
+}
+
+/** Mappings en attente d'écriture (batch : 1 écriture KV pour N titres). */
+const pendingMappings = new Map<string, Partial<Track>>()
+let mappingsFlushTimer: number | null = null
+
+function scheduleMappingsFlush(): void {
+  if (mappingsFlushTimer !== null) return
+  mappingsFlushTimer = window.setTimeout(() => {
+    mappingsFlushTimer = null
+    void flushMappings()
+  }, 30_000)
+}
+
+async function flushMappings(): Promise<void> {
+  if (pendingMappings.size === 0) return
+  const batch = new Map(pendingMappings)
+  pendingMappings.clear()
+  try {
+    const { mappings } = await getMappings()
+    for (const [key, value] of batch) mappings[key] = value
+    await putMappings({ mappings })
+  } catch {
+    // échec (hors ligne ou quota) : on remet en attente pour le prochain flush
+    for (const [key, value] of batch) pendingMappings.set(key, value)
+  }
+}
+
+// À la fermeture de l'app, on tente un dernier flush
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    if (pendingMappings.size > 0) void flushMappings()
+  })
+}
+
+/** Résout le videoId YouTube d'un titre (cache KV → recherche sinon). */
 async function resolveVideoId(track: Track): Promise<Track> {
   if (!track.unmapped) return track
+  await loadMappings()
+  const cached = mapCache.get(track.id)
+  if (cached?.id) {
+    return { ...track, ...cached, unmapped: false }
+  }
   const items = await searchTracks(`${track.title} ${track.author}`)
   const first = pickBestMatch(items, track)
   if (!first) throw new Error(`Aucun résultat YouTube pour « ${track.title} »`)
-  return {
+  const resolved: Track = {
     ...track,
     id: first.id,
     title: first.title,
@@ -57,6 +134,9 @@ async function resolveVideoId(track: Track): Promise<Track> {
     thumbnail: first.thumbnail,
     unmapped: false
   }
+  mapCache.set(track.id, resolved)
+  void saveMapping(track.id, resolved)
+  return resolved
 }
 
 /**
@@ -85,10 +165,14 @@ function pickBestMatch(items: Track[], track: Track): Track | undefined {
   return [...items].sort((a, b) => score(b) - score(a))[0]
 }
 
-/** Ajoute le titre à l'historique (KV) — fire-and-forget, dédupliqué par id. */
+/** Ajoute le titre à l'historique (KV) — seulement après 20 s d'écoute,
+ *  dédupliqué par id et espacé d'au moins 30 s (économie du quota KV). */
 async function recordHistory(track: Track): Promise<void> {
   if (!track || !track.id || track.id === lastRecordedId) return
+  const now = Date.now()
+  if (now - lastHistoryWrite < 30_000) return
   lastRecordedId = track.id
+  lastHistoryWrite = now
   try {
     const { tracks } = await getHistory()
     const next = [track, ...tracks.filter((t) => t.id !== track.id)].slice(0, 100)
@@ -98,62 +182,102 @@ async function recordHistory(track: Track): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Sondage parallèle des sources
+// ---------------------------------------------------------------------------
+
+/**
+ * Sonde des URLs de flux en parallèle (éléments <audio> temporaires) et
+ * renvoie la première qui charge ses métadonnées. Rapide : on ne perd pas de
+ * temps sur des sources mortes séquentiellement.
+ */
+function probeStreams(urls: string[], timeoutMs: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (urls.length === 0) {
+      resolve(null)
+      return
+    }
+    let pending = urls.length
+    let settled = false
+
+    const finish = (url: string | null): void => {
+      if (settled) return
+      settled = true
+      resolve(url)
+    }
+
+    for (const url of urls) {
+      const probe = new Audio()
+      const fail = (): void => {
+        probe.src = ''
+        pending--
+        if (pending === 0) finish(null)
+      }
+      const t = window.setTimeout(fail, timeoutMs)
+      probe.onloadedmetadata = () => {
+        window.clearTimeout(t)
+        probe.src = ''
+        finish(url)
+      }
+      probe.onerror = () => {
+        window.clearTimeout(t)
+        fail()
+      }
+      probe.src = url
+    }
+  })
+}
+
+function streamError(): string {
+  return 'Lecture impossible : les sources Invidious sont indisponibles pour le moment. Réessayez dans quelques secondes.'
+}
+
 /** Joue le titre à l'index donné de la file, en résolvant le flux. */
 async function loadAndPlay(track: Track): Promise<void> {
   const resolved = await resolveVideoId(track)
 
-  usePlayer.setState({ current: resolved, error: null, isPlaying: false })
+  usePlayer.setState({ current: resolved, error: null, isPlaying: false, loading: true })
   updateMediaSession(resolved)
 
-  // URLs companion directes, essayées l'une après l'autre (voir tryStream/advance).
-  streamCandidates = listStreamCandidates(resolved.id)
-  candidateIndex = 0
-  tryStream()
-}
+  // Sondage parallèle : d'abord les companions (fiables), puis le reste.
+  const candidates = listStreamCandidates(resolved.id)
+  remainingCandidates = candidates.slice(6)
+  const url =
+    (await probeStreams(candidates.slice(0, 6), 3_500)) ??
+    (await probeStreams(remainingCandidates.splice(0, 6), 3_000))
 
-/** Tente la candidate courante ; en cas d'échec, advance() prend le relais. */
-function tryStream(): void {
-  if (!audio) return
-  const url = streamCandidates[candidateIndex]
   if (!url) {
-    usePlayer.setState({
-      isPlaying: false,
-      error: 'Lecture impossible : aucune source audio disponible. Réessayez dans quelques secondes.'
-    })
+    usePlayer.setState({ isPlaying: false, loading: false, error: streamError() })
     return
   }
+  playUrl(url)
+}
+
+/** Joue une URL de flux ; les échecs ultérieurs sont gérés par onAudioError. */
+function playUrl(url: string): void {
+  if (!audio) return
   currentTryingUrl = url
   audio.src = url
   audio.play().catch(() => {
-    // play() rejette (source non supportée, 502…) : l'événement 'error' va
-    // normalement suivre ; sinon on avance après un court délai.
-    window.setTimeout(() => {
-      if (audio && audio.src === currentTryingUrl && audio.paused && audio.currentTime === 0 && audio.readyState <= 2) {
-        advance()
-      }
-    }, 1500)
-  })
-}
-
-/** Passe à la candidate suivante ; si tout a échoué, affiche une erreur claire. */
-function advance(): void {
-  candidateIndex++
-  if (candidateIndex < streamCandidates.length) {
-    tryStream()
-    return
-  }
-  usePlayer.setState({
-    isPlaying: false,
-    error: 'Lecture impossible : les sources Invidious sont indisponibles pour le moment. Réessayez dans quelques secondes.'
+    /* l'événement 'error' prend le relais (onAudioError) */
   })
 }
 
 function onAudioError(): void {
   const { current } = usePlayer.getState()
   if (!audio || !current) return
-  // Ignore les événements obsolètes (une autre candidate est déjà chargée)
+  // Ignore les événements obsolètes (une autre source est déjà chargée)
   if (audio.src !== currentTryingUrl) return
-  advance()
+
+  // Re-sonde ce qui reste (par petits lots), sinon erreur claire.
+  void (async () => {
+    const url = await probeStreams(remainingCandidates.splice(0, 4), 2_500)
+    if (url) {
+      playUrl(url)
+      return
+    }
+    usePlayer.setState({ isPlaying: false, loading: false, error: streamError() })
+  })()
 }
 
 // ---------------------------------------------------------------------------
@@ -167,11 +291,13 @@ if (audio) {
       currentTime: audio.currentTime,
       duration: audio.duration && Number.isFinite(audio.duration) ? audio.duration : 0
     })
+    // Historique : uniquement une fois qu'on écoute vraiment (≥ 20 s)
+    const { current } = usePlayer.getState()
+    if (current && audio.currentTime >= 20) void recordHistory(current)
   })
   audio.addEventListener('play', () => {
-    usePlayer.setState({ isPlaying: true })
+    usePlayer.setState({ isPlaying: true, loading: false })
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
-    recordHistory(usePlayer.getState().current!)
   })
   audio.addEventListener('pause', () => {
     usePlayer.setState({ isPlaying: false })
@@ -189,6 +315,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   index: 0,
   current: null,
   isPlaying: false,
+  loading: false,
   currentTime: 0,
   duration: 0,
   error: null,
@@ -196,11 +323,11 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   async play(track, queue) {
     const q = queue ?? (get().queue.some((t) => t.id === track.id) ? get().queue : [track])
     const index = Math.max(0, q.findIndex((t) => t.id === track.id))
-    set({ queue: q, index, current: track, error: null })
+    set({ queue: q, index, current: track, error: null, loading: true })
     try {
       await loadAndPlay(track)
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : 'Lecture impossible' })
+      set({ error: e instanceof Error ? e.message : 'Lecture impossible', loading: false })
     }
   },
 
@@ -219,7 +346,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     const nextIndex = (index + 1) % queue.length
     const track = queue[nextIndex]!
     set({ index: nextIndex })
-    loadAndPlay(track).catch(() => set({ error: 'Lecture impossible' }))
+    loadAndPlay(track).catch(() => set({ error: 'Lecture impossible', loading: false }))
   },
 
   prev() {
@@ -232,7 +359,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     const prevIndex = (index - 1 + queue.length) % queue.length
     const track = queue[prevIndex]!
     set({ index: prevIndex })
-    loadAndPlay(track).catch(() => set({ error: 'Lecture impossible' }))
+    loadAndPlay(track).catch(() => set({ error: 'Lecture impossible', loading: false }))
   },
 
   seek(time) {
@@ -248,6 +375,6 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
       audio.removeAttribute('src')
       audio.load()
     }
-    set({ isPlaying: false, currentTime: 0 })
+    set({ isPlaying: false, currentTime: 0, loading: false })
   }
 }))

@@ -69,6 +69,22 @@ export function putSettings(blob: SettingsBlob): Promise<{ ok: true }> {
 }
 
 // ---------------------------------------------------------------------------
+// Mapping Deezer→YouTube (cache, pour jouer les titres non mappés sans
+// relancer une recherche YouTube à chaque lecture)
+// ---------------------------------------------------------------------------
+
+export interface MappingsBlob {
+  mappings: Record<string, Partial<Track>>
+}
+
+export function getMappings(): Promise<MappingsBlob> {
+  return request('/mappings')
+}
+export function putMappings(blob: MappingsBlob): Promise<{ ok: true }> {
+  return request('/mappings', { method: 'POST', body: JSON.stringify(blob) })
+}
+
+// ---------------------------------------------------------------------------
 // Import Deezer
 // ---------------------------------------------------------------------------
 

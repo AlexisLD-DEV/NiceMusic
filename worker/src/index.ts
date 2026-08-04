@@ -36,8 +36,15 @@ async function readBlob<T>(kv: KVNamespace, key: string, fallback: T): Promise<T
   }
 }
 
-async function writeBlob(kv: KVNamespace, key: string, value: unknown): Promise<void> {
-  await kv.put(key, JSON.stringify(value))
+async function writeBlob(kv: KVNamespace, key: string, value: unknown): Promise<boolean> {
+  try {
+    await kv.put(key, JSON.stringify(value))
+    return true
+  } catch (e) {
+    // Quota quotidien dépassé ou erreur KV : on le signale sans crasher.
+    console.error(`KV put échoué (${key}) :`, e instanceof Error ? e.message : e)
+    return false
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +63,10 @@ async function putBlob(env: Env, key: string, body: unknown): Promise<Response> 
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return error('Corps invalide : attendu un objet JSON', 400)
   }
-  await writeBlob(env.NICEMUSIC_KV, key, value)
+  const ok = await writeBlob(env.NICEMUSIC_KV, key, value)
+  if (!ok) {
+    return error('Limite d’écriture Cloudflare KV atteinte pour aujourd’hui. Réessayez après minuit UTC.', 429)
+  }
   return json({ ok: true })
 }
 
@@ -138,6 +148,13 @@ export default {
       if (blobRoute) {
         if (method === 'GET') return getBlob(env, blobRoute.key, blobRoute.fallback)
         if (method === 'POST' || method === 'PUT') return putBlob(env, blobRoute.key, await request.json())
+        return error(`Méthode non supportée : ${method} ${path}`, 405)
+      }
+
+      // Mapping Deezer→YouTube (cache de résolution des titres non mappés)
+      if (path === '/api/mappings') {
+        if (method === 'GET') return getBlob(env, 'mappings', { mappings: {} })
+        if (method === 'POST' || method === 'PUT') return putBlob(env, 'mappings', await request.json())
         return error(`Méthode non supportée : ${method} ${path}`, 405)
       }
 
