@@ -40,8 +40,11 @@ export type RepeatMode = 'off' | 'all' | 'one'
 
 function initialVolume(): number {
   try {
-    const v = Number(localStorage.getItem(VOLUME_KEY))
-    if (Number.isFinite(v) && v >= 0 && v <= 1) return v
+    const raw = localStorage.getItem(VOLUME_KEY)
+    if (raw !== null) {
+      const v = Number(raw)
+      if (Number.isFinite(v) && v >= 0 && v <= 1) return v
+    }
   } catch {
     /* défaut */
   }
