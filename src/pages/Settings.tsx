@@ -1,5 +1,6 @@
 import { ImportDeezer } from '../components/ImportDeezer'
 import { InstanceStatus } from '../components/InstanceStatus'
+import { AddByLink } from '../components/AddByLink'
 import { usePlayer, type PlaybackMode } from '../stores/player'
 
 export default function Settings() {
@@ -24,6 +25,8 @@ export default function Settings() {
         <h1 className="text-2xl font-bold tracking-tight">Réglages</h1>
         <p className="text-sm text-muted">Lecture, import, instances et informations.</p>
       </header>
+
+      <AddByLink />
 
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="mb-2 text-sm font-semibold">Mode de lecture</h2>

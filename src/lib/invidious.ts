@@ -168,6 +168,59 @@ export function listStreamCandidates(videoId: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Ajout d'une vidéo par lien YouTube
+// ---------------------------------------------------------------------------
+
+/** Extrait l'ID d'une vidéo depuis un lien YouTube (tous formats courants). */
+export function parseYoutubeUrl(input: string): string | null {
+  const text = input.trim()
+  const patterns = [
+    /(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)([A-Za-z0-9_-]{11})/,
+    /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([A-Za-z0-9_-]{11})/
+  ]
+  for (const p of patterns) {
+    const m = text.match(p)
+    if (m) return m[1]!
+  }
+  return null
+}
+
+/** Récupère le titre/artiste d'une vidéo : oEmbed YouTube d'abord, puis Invidious (relais Jina). */
+export async function fetchVideoInfo(videoId: string): Promise<{ title: string; author: string; thumbnail?: string }> {
+  const thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
+
+  // 1) oEmbed officiel YouTube (CORS ouvert, rapide)
+  try {
+    const res = await fetchWithTimeout(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`,
+      8_000
+    )
+    if (res.ok) {
+      const j = (await res.json()) as { title?: string; author_name?: string }
+      if (j.title) return { title: j.title, author: j.author_name ?? '', thumbnail }
+    }
+  } catch {
+    /* on tente le repli */
+  }
+
+  // 2) Repli : infos vidéo via une instance Invidious (relais Jina)
+  for (let i = 0; i < INSTANCES.length; i++) {
+    const idx = (lastGood + 1 + i) % INSTANCES.length
+    const base = INSTANCES[idx]!
+    try {
+      const res = await fetchWithTimeout(`https://r.jina.ai/${base}/api/v1/videos/${encodeURIComponent(videoId)}`, 12_000)
+      if (!res.ok) continue
+      const body = JSON.parse(unwrapJina(await res.text())) as { title?: string; author?: string }
+      if (body.title) return { title: body.title, author: body.author ?? '', thumbnail }
+    } catch {
+      /* instance suivante */
+    }
+  }
+
+  throw new Error('Impossible de récupérer les informations de la vidéo')
+}
+
+// ---------------------------------------------------------------------------
 // Santé des instances (page Réglages)
 // ---------------------------------------------------------------------------
 

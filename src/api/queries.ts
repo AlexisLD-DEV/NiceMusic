@@ -32,7 +32,17 @@ export function useFavorites() {
     void api.putFavorites({ tracks: next }).catch(() => qc.invalidateQueries({ queryKey: ['favorites'] }))
   }
 
-  return { query, isFavorite, toggleFavorite }
+  /** Ajoute un titre aux favoris s'il n'y est pas déjà (ex. lien YouTube collé). */
+  const addFavorite = (track: Track): boolean => {
+    const current = (qc.getQueryData<FavoritesBlob>(['favorites']) ?? query.data) ?? { tracks: [] }
+    if (current.tracks.some((t) => t.id === track.id)) return false
+    const next = dedupeTracks([track, ...current.tracks])
+    qc.setQueryData<FavoritesBlob>(['favorites'], { tracks: next })
+    void api.putFavorites({ tracks: next }).catch(() => qc.invalidateQueries({ queryKey: ['favorites'] }))
+    return true
+  }
+
+  return { query, isFavorite, toggleFavorite, addFavorite }
 }
 
 // ---------------------------------------------------------------------------
