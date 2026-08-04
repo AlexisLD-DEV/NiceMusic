@@ -153,15 +153,18 @@ export async function searchTracks(q: string): Promise<Track[]> {
 export function listStreamCandidates(videoId: string): string[] {
   const id = encodeURIComponent(videoId)
   const urls: string[] = []
+  // 1) companions connus (proxy direct, le plus fiable)
   for (const host of COMPANIONS) {
     for (const itag of [140, 251]) {
       urls.push(`${host}/companion/latest_version?id=${id}&itag=${itag}&local=true`)
     }
   }
+  // 2) chaînes /latest_version des instances (certaines servent en direct)
   for (const base of INSTANCES) {
     urls.push(`${base}/latest_version?id=${id}&itag=140&local=true`)
+    urls.push(`${base}/latest_version?id=${id}&itag=251&local=true`)
   }
-  return [...urls, ...urls.map((u, i) => `${u}${u.includes('?') ? '&' : '?'}r=${i}`)]
+  return urls
 }
 
 // ---------------------------------------------------------------------------

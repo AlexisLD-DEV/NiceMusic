@@ -186,10 +186,14 @@ async function recordHistory(track: Track): Promise<void> {
 // Sondage parallèle des sources
 // ---------------------------------------------------------------------------
 
+/** Dernière URL qui a réellement joué (rotation : on la retente en premier). */
+let lastWorkingUrl: string | null = null
+
 /**
  * Sonde des URLs de flux en parallèle (éléments <audio> temporaires) et
- * renvoie la première qui charge ses métadonnées. Rapide : on ne perd pas de
- * temps sur des sources mortes séquentiellement.
+ * renvoie la première qui charge réellement des données.
+ * Signaux fiables : 'loadedmetadata'/'loadeddata'/'canplay' OU readyState ≥ 2
+ * (certains flux m4a n'envoient pas 'loadedmetadata' si le moov est en fin).
  */
 function probeStreams(urls: string[], timeoutMs: number): Promise<string | null> {
   return new Promise((resolve) => {
@@ -208,24 +212,48 @@ function probeStreams(urls: string[], timeoutMs: number): Promise<string | null>
 
     for (const url of urls) {
       const probe = new Audio()
-      const fail = (): void => {
+      probe.preload = 'auto'
+      let timer = 0
+      let poll = 0
+
+      const cleanup = (): void => {
+        if (timer) window.clearTimeout(timer)
+        if (poll) window.clearInterval(poll)
         probe.src = ''
+      }
+      const ok = (): void => {
+        cleanup()
+        finish(url)
+      }
+      const fail = (): void => {
+        cleanup()
         pending--
         if (pending === 0) finish(null)
       }
-      const t = window.setTimeout(fail, timeoutMs)
-      probe.onloadedmetadata = () => {
-        window.clearTimeout(t)
-        probe.src = ''
-        finish(url)
-      }
-      probe.onerror = () => {
-        window.clearTimeout(t)
-        fail()
-      }
+
+      timer = window.setTimeout(fail, timeoutMs)
+      probe.onloadedmetadata = ok
+      probe.onloadeddata = ok
+      probe.oncanplay = ok
+      probe.onerror = fail
+      // Filet de sécurité : readyState ≥ 2 (données de lecture dispo)
+      poll = window.setInterval(() => {
+        if (!settled && probe.readyState >= 2) ok()
+      }, 200)
       probe.src = url
     }
   })
+}
+
+/** Remonte la dernière URL qui a joué en tête des candidats. */
+function reorderCandidates(candidates: string[]): string[] {
+  if (!lastWorkingUrl) return candidates
+  const rest = candidates.filter((u) => u !== lastWorkingUrl)
+  return [lastWorkingUrl!, ...rest]
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => window.setTimeout(r, ms))
 }
 
 function streamError(): string {
@@ -239,12 +267,15 @@ async function loadAndPlay(track: Track): Promise<void> {
   usePlayer.setState({ current: resolved, error: null, isPlaying: false, loading: true })
   updateMediaSession(resolved)
 
-  // Sondage parallèle : d'abord les companions (fiables), puis le reste.
-  const candidates = listStreamCandidates(resolved.id)
-  remainingCandidates = candidates.slice(6)
-  const url =
-    (await probeStreams(candidates.slice(0, 6), 3_500)) ??
-    (await probeStreams(remainingCandidates.splice(0, 6), 3_000))
+  // Sondage parallèle de toutes les sources ; si tout échoue, re-sonde après
+  // 4 s (les companions se rétablissent souvent en quelques secondes).
+  const candidates = reorderCandidates(listStreamCandidates(resolved.id))
+  remainingCandidates = candidates
+  let url = await probeStreams(candidates, 4_500)
+  if (!url) {
+    await sleep(4_000)
+    url = await probeStreams(candidates, 4_500)
+  }
 
   if (!url) {
     usePlayer.setState({ isPlaying: false, loading: false, error: streamError() })
@@ -257,6 +288,7 @@ async function loadAndPlay(track: Track): Promise<void> {
 function playUrl(url: string): void {
   if (!audio) return
   currentTryingUrl = url
+  lastWorkingUrl = url
   audio.src = url
   audio.play().catch(() => {
     /* l'événement 'error' prend le relais (onAudioError) */
@@ -269,9 +301,9 @@ function onAudioError(): void {
   // Ignore les événements obsolètes (une autre source est déjà chargée)
   if (audio.src !== currentTryingUrl) return
 
-  // Re-sonde ce qui reste (par petits lots), sinon erreur claire.
+  // Re-sonde les sources restantes ; sinon erreur claire.
   void (async () => {
-    const url = await probeStreams(remainingCandidates.splice(0, 4), 2_500)
+    const url = await probeStreams(reorderCandidates(remainingCandidates), 3_500)
     if (url) {
       playUrl(url)
       return
