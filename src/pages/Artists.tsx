@@ -13,28 +13,58 @@ interface ArtistGroup {
   tracks: Track[]
 }
 
+/**
+ * Normalise un nom d'artiste pour regrouper les variantes YouTube :
+ * - minuscules, sans espaces/ponctuation superflus
+ * - retire les suffixes fréquents : « officiel », « - topic », « c.c »,
+ *   « and », « vevo », « - topic », « aka ... » etc.
+ * Ex. « GAZO OFFICIEL » → « gazo », « Ziak C.C » → « ziak ».
+ */
+function normalizeArtist(raw: string): string {
+  let s = raw.toLowerCase()
+  // retire tout ce qui suit « aka » / « - topic » / « officiel »
+  s = s
+    .replace(/\bofficial\b/g, ' ')
+    .replace(/\bofficiel\b/g, ' ')
+    .replace(/\bvevo\b/g, ' ')
+    .replace(/-\s*topic\b/g, ' ')
+    .replace(/\baka[^a-z0-9].*$/gi, ' ')
+    .replace(/c\.?c\.?$/g, ' ')
+    .replace(/ and /g, ' ')
+    .replace(/ & /g, ' ')
+    // retire les caractères non alphanumériques
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+  return s || raw.toLowerCase()
+}
+
 /** Page « Artiste » : liste les artistes des favoris, chacun regroupant ses musiques. */
 export default function Artists() {
   const { query, toggleFavorite } = useFavorites()
   const tracks = query.data?.tracks ?? []
-  const [selected, setSelected] = useState<ArtistGroup | null>(null)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
 
-  // Regroupe les favoris par artiste (insensible à la casse pour les doublons).
+  // Regroupe les favoris par artiste normalisé (fusionne les variantes).
   const groups: ArtistGroup[] = useMemo(() => {
     const map = new Map<string, { name: string; tracks: Track[] }>()
     for (const t of tracks) {
-      const name = t.author?.trim() || 'Artiste inconnu'
-      const key = name.toLowerCase()
+      const raw = t.author?.trim() || 'Artiste inconnu'
+      const key = normalizeArtist(raw)
       const g = map.get(key)
-      if (g) g.tracks.push(t)
-      else map.set(key, { name, tracks: [t] })
+      if (g) {
+        g.tracks.push(t)
+        // Nom canonique : le plus court (généralement le vrai nom, sans suffixe)
+        if (raw.length < g.name.length) g.name = raw
+      } else {
+        map.set(key, { name: raw, tracks: [t] })
+      }
     }
     return [...map.values()]
-      .map((g) => ({ key: g.name.toLowerCase(), name: g.name, tracks: g.tracks }))
+      .map((g) => ({ key: normalizeArtist(g.name), name: g.name, tracks: g.tracks }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [tracks])
 
-  const artist = selected ?? null
+  const artist = selectedKey ? groups.find((g) => g.key === selectedKey) ?? null : null
 
   return (
     <div className="safe-top px-4 pb-6 pt-4">
@@ -43,7 +73,7 @@ export default function Artists() {
         <>
           <header className="mb-3 flex items-center gap-2">
             <button
-              onClick={() => setSelected(null)}
+              onClick={() => setSelectedKey(null)}
               className="rounded-full p-1.5 text-muted transition active:scale-90"
               aria-label="Retour aux artistes"
             >
@@ -93,7 +123,7 @@ export default function Artists() {
               {groups.map((g) => (
                 <li key={g.key} className="flex items-center gap-3 border-b border-border/60 px-1 py-2.5">
                   <button
-                    onClick={() => setSelected(g)}
+                    onClick={() => setSelectedKey(g.key)}
                     className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     aria-label={`Voir ${g.name}`}
                   >

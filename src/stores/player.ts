@@ -256,6 +256,11 @@ let ytReady = false
 let ytPending: string | null = null
 let ytPoll: number | null = null
 
+/** Tampon pour le watchdog anti-blocage (observe si le temps avance). */
+let lastPollTime = -1
+let lastPollTs = 0
+const STALL_MS = 12_000
+
 function startYtPoll(): void {
   if (ytPoll !== null) return
   ytPoll = window.setInterval(() => {
@@ -265,6 +270,29 @@ function startYtPoll(): void {
     updateMediaSessionPosition(t, d)
     const { current } = usePlayer.getState()
     if (current && t >= 20) void recordHistory(current)
+
+    // Avance à la fin de piste (détectée par le polling, fiable même écran
+    // verrouillé, en complément de l'événement state===0 qui peut être raté
+    // quand l'onglet passe en arrière-plan).
+    if (d > 0 && t >= d - 1.5) {
+      usePlayer.getState().next()
+      return
+    }
+
+    // Watchdog : si on est censé jouer mais que le temps n'avance pas depuis
+    // trop longtemps (et qu'on n'est pas à la fin), la lecture est bloquée
+    // (iframe suspendue par l'OS) → on force le titre suivant.
+    const { isPlaying } = usePlayer.getState()
+    if (isPlaying) {
+      if (lastPollTs !== 0 && t === lastPollTime && Date.now() - lastPollTs > STALL_MS) {
+        usePlayer.getState().next()
+        return
+      }
+      lastPollTime = t
+      lastPollTs = Date.now()
+    } else {
+      lastPollTs = 0
+    }
   }, 500)
 }
 
@@ -320,6 +348,8 @@ async function playYtTrack(track: Track): Promise<void> {
         if (state === 1) {
           // Une vidéo a démarré : réinitialise le compteur d'erreurs consécutives
           consecutiveErrors = 0
+          lastPollTime = -1
+          lastPollTs = 0
           usePlayer.setState({ isPlaying: true, loading: false })
           setMediaSessionPlaybackState('playing')
           startYtPoll()
