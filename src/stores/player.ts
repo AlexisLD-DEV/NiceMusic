@@ -256,8 +256,8 @@ async function recordHistory(track: Track): Promise<void> {
 let ytReady = false
 let ytPending: string | null = null
 let ytPoll: number | null = null
-/** Compteur d'itérations du poll (pour espacer la réassertion Media Session). */
-let ytPollTick = 0
+/** Timer dédié à la réassertion de la Media Session (indépendant du poll). */
+let msTimer: number | null = null
 
 /** Tampon pour le watchdog anti-blocage (observe si le temps avance). */
 let lastPollTime = -1
@@ -267,18 +267,12 @@ const STALL_MS = 12_000
 function startYtPoll(): void {
   if (ytPoll !== null) return
   ytPoll = window.setInterval(() => {
-    ytPollTick++
     const t = ytCurrentTime()
     const d = ytDuration()
     usePlayer.setState({ currentTime: t, duration: d })
     updateMediaSessionPosition(t, d)
     const { current } = usePlayer.getState()
     if (current && t >= 20) void recordHistory(current)
-
-    // L'iframe YouTube écrase la Media Session (play/pause seuls) à chaque
-    // vidéo : on ré-affirme nos handlers/métadonnées toutes les ~5 s pour
-    // garder les boutons précédent/suivant sur l'écran verrouillé.
-    if (ytPollTick % 10 === 0) reassertMediaSession()
 
     // Avance à la fin de piste (détectée par le polling, fiable même écran
     // verrouillé, en complément de l'événement state===0 qui peut être raté
@@ -309,6 +303,31 @@ function stopYtPoll(): void {
   if (ytPoll !== null) {
     window.clearInterval(ytPoll)
     ytPoll = null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Réassertion Media Session (écran verrouillé)
+//
+// L'iframe YouTube écrase la Media Session (play/pause seuls, puis peut même
+// la faire disparaître quand l'onglet passe en arrière-plan) : on ré-affirme
+// nos métadonnées + handlers sur un timer DÉDIÉ, actif tant qu'un titre est
+// chargé — indépendamment des états rapportés par l'iframe. C'est ce qui
+// garantit que les boutons précédent/suivant restent et que l'interface ne
+// disparaît pas pendant que la musique tourne.
+// ---------------------------------------------------------------------------
+
+function startMediaSessionTimer(): void {
+  if (msTimer !== null) return
+  msTimer = window.setInterval(() => {
+    if (usePlayer.getState().current) reassertMediaSession()
+  }, 2_000)
+}
+
+function stopMediaSessionTimer(): void {
+  if (msTimer !== null) {
+    window.clearInterval(msTimer)
+    msTimer = null
   }
 }
 
@@ -363,11 +382,15 @@ async function playYtTrack(track: Track): Promise<void> {
           setMediaSessionPlaybackState('playing')
           reassertMediaSession()
           startYtPoll()
+          startMediaSessionTimer()
           void prefetchUpcoming()
         } else if (state === 2) {
           usePlayer.setState({ isPlaying: false })
           setMediaSessionPlaybackState('paused')
-          stopYtPoll()
+          // NOTE : on ne coupe pas le poll ici. L'iframe peut émettre un état
+          // 2 (pause) sporadique quand l'onglet passe en arrière-plan sans
+          // que la musique ne s'arrête réellement ; couper le poll arrêtait
+          // la réassertion Media Session → interface verrouillée qui disparaît.
         } else if (state === 0) {
           stopYtPoll()
           usePlayer.getState().next()
@@ -737,6 +760,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
 function stopCurrentPlayback(): void {
   ytPause()
   stopYtPoll()
+  stopMediaSessionTimer()
 }
 
 if (typeof window !== 'undefined') {

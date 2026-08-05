@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useFavorites } from '../api/queries'
 import type { Track } from '../lib/types'
 import { TrackList } from '../components/TrackList'
-import { ArtistIcon, ChevronLeftIcon } from '../components/icons'
+import { ArtistIcon, ChevronLeftIcon, PlayIcon } from '../components/icons'
 import { usePlayer } from '../stores/player'
 
 /** Groupe un ensemble de titres sous un artiste (clé normalisée). */
@@ -61,7 +60,8 @@ export default function Artists() {
     }
     return [...map.values()]
       .map((g) => ({ key: normalizeArtist(g.name), name: g.name, tracks: g.tracks }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      // Tri par nombre de titres décroissant, puis alphabétique.
+      .sort((a, b) => b.tracks.length - a.tracks.length || a.name.localeCompare(b.name))
   }, [tracks])
 
   const artist = selectedKey ? groups.find((g) => g.key === selectedKey) ?? null : null
@@ -139,13 +139,17 @@ export default function Artists() {
                       <p className="text-xs text-muted">{g.tracks.length} titre(s)</p>
                     </div>
                   </button>
-                  <Link
-                    to="/search"
-                    className="shrink-0 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-white transition active:scale-95"
-                    aria-label={`Rechercher ${g.name}`}
+                  <button
+                    onClick={() => {
+                      const q = g.tracks
+                      void usePlayer.getState().play(q[0]!, q)
+                    }}
+                    className="flex shrink-0 items-center gap-1 rounded-full bg-accent px-3.5 py-2 text-xs font-semibold text-white transition active:scale-95"
+                    aria-label={`Lire ${g.name}`}
                   >
-                    Rechercher
-                  </Link>
+                    <PlayIcon width={14} height={14} />
+                    Lecture
+                  </button>
                 </li>
               ))}
             </ul>
