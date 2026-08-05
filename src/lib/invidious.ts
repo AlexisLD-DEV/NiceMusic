@@ -176,7 +176,7 @@ export function parseYoutubeUrl(input: string): string | null {
 }
 
 /** Récupère le titre/artiste d'une vidéo : oEmbed YouTube d'abord, puis repli via le relais. */
-export async function fetchVideoInfo(videoId: string): Promise<{ title: string; author: string; thumbnail?: string }> {
+export async function fetchVideoInfo(videoId: string): Promise<{ title: string; author: string; thumbnail?: string; publishedAt?: number }> {
   const thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
 
   // 1) oEmbed officiel YouTube (CORS ouvert, rapide)
@@ -200,14 +200,32 @@ export async function fetchVideoInfo(videoId: string): Promise<{ title: string; 
     try {
       const res = await fetchWithTimeout(`https://r.jina.ai/${base}/api/v1/videos/${encodeURIComponent(videoId)}`, 12_000)
       if (!res.ok) continue
-      const body = JSON.parse(unwrapJina(await res.text())) as { title?: string; author?: string }
-      if (body.title) return { title: body.title, author: body.author ?? '', thumbnail }
+      const body = JSON.parse(unwrapJina(await res.text())) as {
+        title?: string
+        author?: string
+        published?: number | string
+      }
+      if (body.title) {
+        const publishedAt = parsePublished(body.published)
+        return { title: body.title, author: body.author ?? '', thumbnail, publishedAt }
+      }
     } catch {
       /* instance suivante */
     }
   }
 
   throw new Error('Impossible de récupérer les informations de la vidéo')
+}
+
+/** Convertit un champ `published` d'Invidious (epoch s ou date ISO) en epoch s. */
+function parsePublished(published: number | string | undefined): number | undefined {
+  if (published === undefined || published === null) return undefined
+  if (typeof published === 'number' && Number.isFinite(published)) return published
+  if (typeof published === 'string') {
+    const t = Date.parse(published)
+    if (Number.isFinite(t)) return Math.round(t / 1000)
+  }
+  return undefined
 }
 
 // ---------------------------------------------------------------------------

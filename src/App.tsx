@@ -1,7 +1,9 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { BottomNav } from './components/BottomNav'
 import { PlayerBar } from './components/PlayerBar'
+import { useFavorites } from './api/queries'
+import { startFavoritesBackfill } from './stores/player'
 
 // Chargement à la demande : chaque page est un chunk séparé → JS initial plus
 // léger, premier affichage plus rapide sur mobile.
@@ -25,9 +27,23 @@ function PageLoader() {
   )
 }
 
+/**
+ * Déclenche le pré-mapping des favoris dès le démarrage de l'app (quelle que
+ * soit la page ouverte), une fois les favoris chargés.
+ */
+function BackfillTrigger() {
+  const { query } = useFavorites()
+  const tracks = query.data?.tracks
+  useEffect(() => {
+    if (tracks && tracks.length > 0) startFavoritesBackfill(tracks)
+  }, [tracks])
+  return null
+}
+
 export default function App() {
   return (
     <div className="flex h-full flex-col bg-bg text-text">
+      <BackfillTrigger />
       {/* Zone défilante */}
       <main className="flex-1 overflow-y-auto">
         <Suspense fallback={<PageLoader />}>

@@ -1,6 +1,13 @@
 import { create } from 'zustand'
-import { getHistory, getMappings, putHistory, putMappings } from '../api/client'
-import { searchTracks } from '../lib/invidious'
+import {
+  getFavorites,
+  getHistory,
+  getMappings,
+  putFavorites,
+  putHistory,
+  putMappings
+} from '../api/client'
+import { fetchVideoInfo, searchTracks } from '../lib/invidious'
 import {
   createYTPlayer,
   destroyYTPlayer,
@@ -124,7 +131,8 @@ async function saveMapping(key: string, resolved: Track): Promise<void> {
     title: resolved.title,
     author: resolved.author,
     duration: resolved.duration,
-    thumbnail: resolved.thumbnail
+    thumbnail: resolved.thumbnail,
+    publishedAt: resolved.publishedAt
   })
   scheduleMappingsFlush()
 }
@@ -171,6 +179,16 @@ async function resolveVideoId(track: Track): Promise<Track> {
   const items = await searchTracks(`${track.title} ${track.author}`)
   const first = pickBestMatch(items, track)
   if (!first) throw new Error(`Aucun résultat YouTube pour « ${track.title} »`)
+
+  // Récupère la date de publication (échec toléré : sans date, on trie en fin).
+  let publishedAt: number | undefined
+  try {
+    const info = await fetchVideoInfo(first.id)
+    publishedAt = info.publishedAt
+  } catch {
+    /* pas de date : le titre restera en fin de tri */
+  }
+
   const resolved: Track = {
     ...track,
     id: first.id,
@@ -178,6 +196,7 @@ async function resolveVideoId(track: Track): Promise<Track> {
     author: first.author,
     duration: first.duration,
     thumbnail: first.thumbnail,
+    publishedAt,
     unmapped: false
   }
   mapCache.set(track.id, resolved)
@@ -379,29 +398,165 @@ function randomOtherIndex(current: number, length: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// Pré-mapping progressif des favoris
+// Pré-mapping robuste des favoris (liens YouTube + date de publication)
 // ---------------------------------------------------------------------------
 
 let backfillStarted = false
-let backfillInFlight = false
+let backfillRunning = false
+
+const BACKFILL_KEYS = 'nicemusic.backfill.failed'
+const BACKFILL_BATCH = 3
+const BACKFILL_MAX_RETRIES = 3
+
+interface BackfillState {
+  total: number
+  remaining: number
+  failed: number
+  running: boolean
+}
+const useBackfill = create<{ s: BackfillState }>()(() => ({
+  s: { total: 0, remaining: 0, failed: 0, running: false }
+}))
+
+/** Hook UI : état de progression du pré-mapping des favoris. */
+export function useBackfillState(): BackfillState {
+  return useBackfill((x) => x.s)
+}
+
+function setBackfill(patch: Partial<BackfillState>): void {
+  useBackfill.setState((cur) => ({ s: { ...cur.s, ...patch } }))
+}
+
+function readFailed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(BACKFILL_KEYS)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw) as string[]
+    return new Set(arr)
+  } catch {
+    return new Set()
+  }
+}
+
+function writeFailed(ids: Set<string>): void {
+  try {
+    localStorage.setItem(BACKFILL_KEYS, JSON.stringify([...ids]))
+  } catch {
+    /* quota plein : on ignore */
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
 
 /**
- * Résout en arrière-plan le vidéoId YouTube des titres non mappés, par petits
- * lots (respectueux du quota KV et du relais). Appelé une fois au chargement :
- * au fil du temps, tous les favoris finissent mappés → shuffle / lecture
- * deviennent plus rapides sans passer par une recherche au moment de jouer.
+ * Résout de façon robuste — retry + reprise inter-visites — le vidéoId
+ * YouTube de tous les favoris non mappés, par petits lots. Les ids qui
+ * échouent sont persistés en localStorage et retentés à la prochaine visite.
+ * Chaque lot réussi réécrit le blob favorites (quota KV : 1 écriture/lot).
  */
-export function startFavoritesBackfill(tracks: Track[]): void {
-  if (backfillStarted) return
+export function startFavoritesBackfill(initialTracks: Track[]): void {
+  if (backfillStarted || backfillRunning) return
   backfillStarted = true
   void (async () => {
-    const unmapped = tracks.filter((t) => t.unmapped)
-    for (let i = 0; i < unmapped.length; i += 3) {
-      if (backfillInFlight) continue
-      backfillInFlight = true
-      const batch = unmapped.slice(i, i + 3)
-      await Promise.allSettled(batch.map((t) => resolveVideoId(t)))
-      backfillInFlight = false
+    backfillRunning = true
+    setBackfill({ running: true })
+    try {
+      // Charge l'état le plus récent des favoris (le blob a pu bouger).
+      let current: Track[]
+      try {
+        const b = await getFavorites()
+        current = b.tracks
+      } catch {
+        current = initialTracks
+      }
+
+      const failed = readFailed()
+      const all = current
+      const targets = all.filter((t) => (t.unmapped || failed.has(t.id)) && !mapCache.has(t.id))
+      setBackfill({ total: targets.length, remaining: targets.length, failed: failed.size })
+
+      // Phase 2 — rattrapage : les favoris déjà mappés mais sans date
+      // de publication (pour le tri). On complète en arrière-plan.
+      const datedMissing = all
+        .filter((t) => !t.unmapped && !t.publishedAt && mapCache.get(t.id)?.publishedAt == null)
+        .slice(0, 20)
+
+      for (let i = 0; i < targets.length; i += BACKFILL_BATCH) {
+        const batch = targets.slice(i, i + BACKFILL_BATCH)
+        let batchResolved: Track[] = []
+        for (const track of batch) {
+          // Retry par titre
+          for (let attempt = 0; attempt <= BACKFILL_MAX_RETRIES; attempt++) {
+            try {
+              const resolved = await resolveVideoId(track)
+              mapCache.set(track.id, resolved)
+              batchResolved.push(resolved)
+              failed.delete(track.id)
+              break
+            } catch {
+              if (attempt >= BACKFILL_MAX_RETRIES) {
+                failed.add(track.id)
+              }
+              await sleep(1_000)
+            }
+          }
+        }
+        writeFailed(failed)
+
+        // Réécrit le blob favorites avec les titres résolus (1 écriture/lot).
+        if (batchResolved.length > 0) {
+          try {
+            const b = await getFavorites()
+            const map = new Map(b.tracks.map((t) => [t.id, t]))
+            for (const r of batchResolved) map.set(r.id, r)
+            // Met aussi à jour les entrées par leur id Deezer d'origine porté
+            // par le track (le blob favorites garde l'id deezer ou youtube).
+            await putFavorites({ tracks: [...map.values()] })
+          } catch {
+            /* quota/erreur : on s'en remet au mapping KV + à la prochaine visite */
+          }
+        }
+
+        setBackfill({ remaining: targets.length - (i + batch.length) })
+        // Petite pause entre lots pour ne pas saturer le relais.
+        await sleep(600)
+      }
+
+      // Rattrapage des dates manquantes
+      for (let i = 0; i < datedMissing.length; i += BACKFILL_BATCH) {
+        const batch = datedMissing.slice(i, i + BACKFILL_BATCH)
+        let resolved: Track[] = []
+        for (const track of batch) {
+          const mapped = mapCache.get(track.id)
+          if (mapped) {
+            const info = await fetchVideoInfo(mapped.id).catch(() => null)
+            if (info?.publishedAt) {
+              const withDate = { ...track, ...mapped, publishedAt: info.publishedAt, unmapped: false }
+              mapCache.set(track.id, withDate)
+              resolved.push(withDate)
+            }
+          }
+        }
+        if (resolved.length > 0) {
+          try {
+            const b = await getFavorites()
+            const map = new Map(b.tracks.map((t) => [t.id, t]))
+            for (const r of resolved) map.set(r.id, r)
+            await putFavorites({ tracks: [...map.values()] })
+          } catch {
+            /* ignoré */
+          }
+        }
+        await sleep(400)
+      }
+
+      // Met à jour l'UI de mapping (miniatures / dates présentes sur la page).
+      useMappingsVersion.getState().bump()
+    } finally {
+      backfillRunning = false
+      setBackfill({ running: false })
     }
   })()
 }

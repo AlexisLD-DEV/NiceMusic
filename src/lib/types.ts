@@ -10,6 +10,8 @@ export interface Track {
   duration?: number
   /** URL d'image (thumbnail YouTube ou pochette Deezer) */
   thumbnail?: string
+  /** date de publication YouTube (epoch secondes), si connue — sert au tri */
+  publishedAt?: number
   /** id d'origine côté Deezer, si le titre vient d'un export */
   deezerId?: number
   /** true tant que le titre Deezer n'a pas été mappé vers YouTube */
