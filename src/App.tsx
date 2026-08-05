@@ -10,6 +10,7 @@ import { startFavoritesBackfill } from './stores/player'
 const Home = lazy(() => import('./pages/Home'))
 const Favorites = lazy(() => import('./pages/Favorites'))
 const History = lazy(() => import('./pages/History'))
+const Artists = lazy(() => import('./pages/Artists'))
 const Playlists = lazy(() => import('./pages/Playlists'))
 const PlaylistDetail = lazy(() => import('./pages/PlaylistDetail'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/search" element={<Home />} />
             <Route path="/favorites" element={<Favorites />} />
             <Route path="/history" element={<History />} />
+            <Route path="/artists" element={<Artists />} />
             <Route path="/playlists" element={<Playlists />} />
             <Route path="/playlists/:id" element={<PlaylistDetail />} />
             <Route path="/settings" element={<Settings />} />

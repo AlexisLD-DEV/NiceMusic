@@ -55,7 +55,7 @@ function initialVolume(): number {
   } catch {
     /* défaut */
   }
-  return 0.8
+  return 1 // volume par défaut à 100 %
 }
 
 interface PlayerState {

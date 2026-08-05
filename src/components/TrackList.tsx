@@ -31,7 +31,7 @@ export function TrackList({
   tracks,
   emptyMessage = 'Rien à afficher ici pour le moment.',
   showFavorites = true,
-  showAddToPlaylist = true,
+  showAddToPlaylist = false,
   playQueue,
   onRemove,
   onPlay

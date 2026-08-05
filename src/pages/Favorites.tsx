@@ -91,7 +91,6 @@ export default function Favorites() {
             tracks={filtered}
             playQueue={filtered}
             showFavorites={false}
-            showAddToPlaylist
             onRemove={(t) => toggleFavorite(t)}
           />
         )}
@@ -108,7 +107,6 @@ export default function Favorites() {
             emptyMessage=""
             playQueue={recents}
             showFavorites={false}
-            showAddToPlaylist
           />
         </section>
       )}

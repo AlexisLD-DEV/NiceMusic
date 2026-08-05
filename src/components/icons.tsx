@@ -136,6 +136,13 @@ export const MusicIcon = (p: P) => (
   </Svg>
 )
 
+export const ArtistIcon = (p: P) => (
+  <Svg {...p}>
+    <circle cx={12} cy={7} r={4} />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </Svg>
+)
+
 export const CloseIcon = (p: P) => (
   <Svg {...p}>
     <path d="M6 6l12 12M18 6 6 18" />

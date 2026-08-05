@@ -1,10 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { HistoryIcon, HeartIcon, ListIcon, SearchIcon, SettingsIcon } from './icons'
+import { HistoryIcon, HeartIcon, ArtistIcon, SearchIcon, SettingsIcon } from './icons'
 
 const items = [
   { to: '/', label: 'Favoris', icon: HeartIcon, end: true },
   { to: '/search', label: 'Recherche', icon: SearchIcon, end: true },
-  { to: '/playlists', label: 'Playlists', icon: ListIcon, end: false },
+  { to: '/artists', label: 'Artistes', icon: ArtistIcon, end: false },
   { to: '/history', label: 'Historique', icon: HistoryIcon, end: false },
   { to: '/settings', label: 'Réglages', icon: SettingsIcon, end: false }
 ]
