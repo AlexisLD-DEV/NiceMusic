@@ -22,6 +22,7 @@ import {
 } from '../lib/ytPlayer'
 import type { Track } from '../lib/types'
 import {
+  reassertMediaSession,
   setMediaSessionPlaybackState,
   updateMediaSession,
   updateMediaSessionPosition
@@ -255,6 +256,8 @@ async function recordHistory(track: Track): Promise<void> {
 let ytReady = false
 let ytPending: string | null = null
 let ytPoll: number | null = null
+/** Compteur d'itérations du poll (pour espacer la réassertion Media Session). */
+let ytPollTick = 0
 
 /** Tampon pour le watchdog anti-blocage (observe si le temps avance). */
 let lastPollTime = -1
@@ -264,12 +267,18 @@ const STALL_MS = 12_000
 function startYtPoll(): void {
   if (ytPoll !== null) return
   ytPoll = window.setInterval(() => {
+    ytPollTick++
     const t = ytCurrentTime()
     const d = ytDuration()
     usePlayer.setState({ currentTime: t, duration: d })
     updateMediaSessionPosition(t, d)
     const { current } = usePlayer.getState()
     if (current && t >= 20) void recordHistory(current)
+
+    // L'iframe YouTube écrase la Media Session (play/pause seuls) à chaque
+    // vidéo : on ré-affirme nos handlers/métadonnées toutes les ~5 s pour
+    // garder les boutons précédent/suivant sur l'écran verrouillé.
+    if (ytPollTick % 10 === 0) reassertMediaSession()
 
     // Avance à la fin de piste (détectée par le polling, fiable même écran
     // verrouillé, en complément de l'événement state===0 qui peut être raté
@@ -352,6 +361,7 @@ async function playYtTrack(track: Track): Promise<void> {
           lastPollTs = 0
           usePlayer.setState({ isPlaying: true, loading: false })
           setMediaSessionPlaybackState('playing')
+          reassertMediaSession()
           startYtPoll()
           void prefetchUpcoming()
         } else if (state === 2) {
