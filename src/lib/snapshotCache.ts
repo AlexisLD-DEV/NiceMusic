@@ -7,6 +7,7 @@
  */
 
 const PREFIX = 'nicemusic.snap.'
+const CACHE_TTL_DAYS = 7
 
 function read(key: string): unknown {
   try {
@@ -15,9 +16,10 @@ function read(key: string): unknown {
     const parsed = JSON.parse(raw) as { v: number; t: number }
     // Mise en cache limitée dans le temps (ex. 7 jours) pour ne pas afficher
     // indéfiniment des données très anciennes si l'utilisateur ne revient pas.
-    if (Date.now() - parsed.t > 7 * 24 * 60 * 60 * 1000) return null
+    if (Date.now() - parsed.t > CACHE_TTL_DAYS * 24 * 60 * 60 * 1000) return null
     return parsed.v
-  } catch {
+  } catch (error) {
+    console.error('[SnapshotCache] Failed to read snapshot:', error)
     return null
   }
 }
@@ -25,16 +27,16 @@ function read(key: string): unknown {
 function write(key: string, value: unknown): void {
   try {
     localStorage.setItem(PREFIX + key, JSON.stringify({ v: value, t: Date.now() }))
-  } catch {
-    /* quota plein : on ignore */
+  } catch (error) {
+    console.error('[SnapshotCache] Failed to write snapshot:', error)
   }
 }
 
 function remove(key: string): void {
   try {
     localStorage.removeItem(PREFIX + key)
-  } catch {
-    /* ignoré */
+  } catch (error) {
+    console.error('[SnapshotCache] Failed to remove snapshot:', error)
   }
 }
 

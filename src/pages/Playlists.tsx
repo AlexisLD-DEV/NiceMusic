@@ -8,9 +8,15 @@ export default function Playlists() {
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
 
+  const MAX_PLAYLIST_NAME_LENGTH = 100
+
   function submit() {
     const n = name.trim()
     if (!n) return
+    if (n.length > MAX_PLAYLIST_NAME_LENGTH) {
+      alert(`Le nom de la playlist dépasse les ${MAX_PLAYLIST_NAME_LENGTH} caractères`)
+      return
+    }
     create(n)
     setName('')
     setCreating(false)

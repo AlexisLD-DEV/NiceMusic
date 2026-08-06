@@ -44,6 +44,15 @@ const VOLUME_KEY = 'nicemusic.volume'
 const SHUFFLE_KEY = 'nicemusic.shuffle'
 const REPEAT_KEY = 'nicemusic.repeat'
 
+/** Timer de batch KV pour les mappings (30 secondes). */
+const MAPPINGS_BATCH_FLUSH_MS = 30_000
+
+/** Nombre max de tracks dans l'historique. */
+const MAX_HISTORY_TRACKS = 100
+
+/** Délai d'attente avant de réasserter la Media Session (12 secondes). */
+const MEDIA_SESSION_REASSERT_MS = 12_000
+
 export type RepeatMode = 'off' | 'all' | 'one'
 
 function initialVolume(): number {
@@ -53,7 +62,8 @@ function initialVolume(): number {
       const v = Number(raw)
       if (Number.isFinite(v) && v >= 0 && v <= 1) return v
     }
-  } catch {
+  } catch (error) {
+    console.error('[Player] Failed to load volume:', error)
     /* défaut */
   }
   return 1 // volume par défaut à 100 %
@@ -121,7 +131,8 @@ async function loadMappings(): Promise<void> {
       if (value && value.id) mapCache.set(key, value as Track)
     }
     useMappingsVersion.getState().bump()
-  } catch {
+  } catch (error) {
+    console.error('[Player] Failed to load mappings:', error)
     /* hors ligne : on cherchera à chaque fois */
   }
 }
@@ -147,7 +158,7 @@ function scheduleMappingsFlush(): void {
   mappingsFlushTimer = window.setTimeout(() => {
     mappingsFlushTimer = null
     void flushMappings()
-  }, 30_000)
+  }, MAPPINGS_BATCH_FLUSH_MS)
 }
 
 async function flushMappings(): Promise<void> {
@@ -158,7 +169,8 @@ async function flushMappings(): Promise<void> {
     const { mappings } = await getMappings()
     for (const [key, value] of batch) mappings[key] = value
     await putMappings({ mappings })
-  } catch {
+  } catch (error) {
+    console.error('[Player] Failed to flush mappings:', error)
     for (const [key, value] of batch) pendingMappings.set(key, value)
   }
 }
@@ -242,9 +254,10 @@ async function recordHistory(track: Track): Promise<void> {
   lastHistoryWrite = now
   try {
     const { tracks } = await getHistory()
-    const next = [track, ...tracks.filter((t) => t.id !== track.id)].slice(0, 100)
+    const next = [track, ...tracks.filter((t) => t.id !== track.id)].slice(0, MAX_HISTORY_TRACKS)
     await putHistory({ tracks: next })
-  } catch {
+  } catch (error) {
+    console.error('[Player] Failed to save history:', error)
     /* échec silencieux : l'historique n'est pas critique */
   }
 }
@@ -262,7 +275,7 @@ let msTimer: number | null = null
 /** Tampon pour le watchdog anti-blocage (observe si le temps avance). */
 let lastPollTime = -1
 let lastPollTs = 0
-const STALL_MS = 12_000
+const STALL_MS = MEDIA_SESSION_REASSERT_MS
 
 function startYtPoll(): void {
   if (ytPoll !== null) return

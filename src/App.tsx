@@ -1,7 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { BottomNav } from './components/BottomNav'
-import { PlayerBar } from './components/PlayerBar'
 import { useFavorites } from './api/queries'
 import { startFavoritesBackfill } from './stores/player'
 
@@ -14,6 +12,10 @@ const Artists = lazy(() => import('./pages/Artists'))
 const Playlists = lazy(() => import('./pages/Playlists'))
 const PlaylistDetail = lazy(() => import('./pages/PlaylistDetail'))
 const Settings = lazy(() => import('./pages/Settings'))
+
+// PlayerBar et BottomNav sont aussi lazy pour réduire le bundle initial
+const PlayerBar = lazy(() => import('./components/PlayerBar'))
+const BottomNav = lazy(() => import('./components/BottomNav'))
 
 function PageLoader() {
   return (
@@ -62,8 +64,10 @@ export default function App() {
         </Suspense>
       </main>
 
-      <PlayerBar />
-      <BottomNav />
+      <Suspense fallback={null}>
+        <PlayerBar />
+        <BottomNav />
+      </Suspense>
     </div>
   )
 }

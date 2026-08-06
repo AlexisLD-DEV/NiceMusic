@@ -40,6 +40,15 @@ const searchCache = new Map<string, Track[]>()
 /** Taille max du cache mémoire (évite de tout garder indéfiniment). */
 const SEARCH_CACHE_MAX = 50
 
+/** Timeout pour les appels fetch via Jina Reader (proxy). */
+const JINA_TIMEOUT_MS = 14_000
+
+/** Timeout pour les appels fetch directs aux instances Invidious. */
+const DIRECT_TIMEOUT_MS = 8_000
+
+/** Timeout pour les appels fetch via Jina pour les infos vidéo. */
+const VIDEO_INFO_TIMEOUT_MS = 12_000
+
 interface InvidiousItem {
   type?: string
   videoId?: string
@@ -115,7 +124,7 @@ async function doSearch(query: string): Promise<Track[]> {
     const base = INSTANCES[idx]!
     try {
       const target = `${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video`
-      const res = await fetchWithTimeout(`https://r.jina.ai/${target}`, 14_000)
+      const res = await fetchWithTimeout(`https://r.jina.ai/${target}`, JINA_TIMEOUT_MS)
       if (!res.ok) continue
       const text = await res.text()
       let items: Track[]
@@ -140,7 +149,7 @@ async function doSearch(query: string): Promise<Track[]> {
     try {
       const res = await fetchWithTimeout(
         `${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video`,
-        8_000
+        DIRECT_TIMEOUT_MS
       )
       const ct = res.headers.get('content-type') ?? ''
       if (!res.ok || !ct.includes('json')) continue
@@ -198,7 +207,7 @@ export async function fetchVideoInfo(videoId: string): Promise<{ title: string; 
     const idx = (lastGood + 1 + i) % INSTANCES.length
     const base = INSTANCES[idx]!
     try {
-      const res = await fetchWithTimeout(`https://r.jina.ai/${base}/api/v1/videos/${encodeURIComponent(videoId)}`, 12_000)
+      const res = await fetchWithTimeout(`https://r.jina.ai/${base}/api/v1/videos/${encodeURIComponent(videoId)}`, VIDEO_INFO_TIMEOUT_MS)
       if (!res.ok) continue
       const body = JSON.parse(unwrapJina(await res.text())) as {
         title?: string
