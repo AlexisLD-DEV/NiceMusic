@@ -21,6 +21,8 @@ interface Handlers {
 
 let currentHandlers: Handlers | null = null
 let currentTrack: Track | null = null
+let currentPosition = 0
+let currentDuration = 0
 
 /** Enregistre les handlers d'action (écran verrouillé). */
 export function setupMediaSession(handlers: Handlers): void {
@@ -66,14 +68,24 @@ export function updateMediaSession(track: Track): void {
 }
 
 /**
- * Ré-affirme métadonnées + handlers : à appeler périodiquement pendant la
- * lecture, car l'iframe YouTube écrase la Media Session à chaque nouvelle
- * vidéo (ce qui fait disparaître les boutons précédent/suivant).
+ * Ré-affirme métadonnées + handlers + position : à appeler périodiquement
+ * pendant la lecture, car l'iframe YouTube écrase la Media Session à chaque
+ * nouvelle vidéo (ce qui fait disparaître les boutons précédent/suivant).
+ *
+ * IMPORTANT (Android Chrome/Brave) : l'écran de verrouillage n'affiche les
+ * boutons précédent/suivant QUE si un `setPositionState` valide a été posé.
+ * Ré-affirmer la position ici est donc indispensable, pas seulement les
+ * handlers — sinon seuls play/pause restent visibles.
  */
 export function reassertMediaSession(): void {
   if (!('mediaSession' in navigator)) return
   if (currentTrack) updateMediaSession(currentTrack)
   if (currentHandlers) setupMediaSession(currentHandlers)
+  // Ré-affirme la position : c'est elle qui fait apparaître précédent/suivant
+  // sur l'écran verrouillé Android.
+  if (currentDuration > 0) {
+    updateMediaSessionPosition(currentPosition, currentDuration)
+  }
 }
 
 /** Met à jour l'état de lecture (playing/paused) sur l'écran verrouillé. */
@@ -88,6 +100,8 @@ export function setMediaSessionPlaybackState(state: 'playing' | 'paused'): void 
 
 /** Met à jour la position (progression) sur l'écran verrouillé. */
 export function updateMediaSessionPosition(position: number, duration: number): void {
+  currentPosition = position
+  currentDuration = duration
   if (!('mediaSession' in navigator)) return
   if (duration <= 0 || !Number.isFinite(position) || !Number.isFinite(duration)) return
   try {

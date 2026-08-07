@@ -10,7 +10,6 @@ import {
 import { fetchVideoInfo, searchTracks } from '../lib/invidious'
 import {
   createYTPlayer,
-  destroyYTPlayer,
   ytCurrentTime,
   ytDuration,
   ytPause,
@@ -31,10 +30,11 @@ import {
 /**
  * Store du lecteur — lecture via le lecteur officiel YouTube (IFrame API).
  *
- * Fiable, la lecture continue en arrière-plan et les contrôles d'écran
- * verrouillé sont fournis par le player YouTube lui-même (play/pause),
- * complétés par la Media Session (précédent/suivant/seek). La vidéo peut
- * être masquée (lecture audio seule).
+ * Fiable : l'iframe gère nativement la lecture en arrière-plan et les
+ * contrôles d'écran verrouillé (play/pause/précédent/suivant/seek) via la
+ * Media Session, complétés par nos métadonnées. IMPORTANT : on ne détruit
+ * jamais le player sur `pagehide` (sinon le widget disparaît et la lecture
+ * repart de zéro au déverrouillage d'écran).
  *
  * Le mapping Deezer→YouTube est mis en cache (KV, batché) pour ne relancer
  * une recherche YouTube qu'une seule fois par titre.
@@ -176,9 +176,8 @@ async function flushMappings(): Promise<void> {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', () => {
-    if (pendingMappings.size > 0) void flushMappings()
-  })
+  // (le handler pagehide global est défini plus bas : flush mappings + pas
+  // de destruction du player — voir la fin du fichier)
 }
 
 /** Résout le videoId YouTube d'un titre (cache KV → recherche sinon). */
@@ -394,10 +393,12 @@ function handleMediaKey(e: KeyboardEvent): void {
   }
 }
 
+/** Conteneur du lecteur YouTube (iframe officielle). */
 const YT_PLAYER_ID = 'yt-player-container'
 
 /** Nombre max d'erreurs youtube consécutives avant de stopper (évite la boucle). */
 const MAX_CONSECUTIVE_ERRORS = 3
+
 /** Vidéos qui échouent d'affilée (reset dès qu'une vidéo démarre). */
 let consecutiveErrors = 0
 
@@ -827,8 +828,26 @@ function stopCurrentPlayback(): void {
 }
 
 if (typeof window !== 'undefined') {
+  // IMPORTANT : ne PAS détruire le lecteur YouTube sur pagehide.
+  // Sur Android, verrouiller l'écran fait passer la page en arrière-plan
+  // (bfcache) et déclenche `pagehide` : si on détruit le player ici, le
+  // widget d'écran verrouillé disparaît et, au déverrouillage, le lecteur
+  // est réinitialisé → la musique repart du début. On laisse l'iframe
+  // YouTube gérer nativement la lecture en arrière-plan.
+  // On profite de `pageshow` pour re-synchroniser l'état UI si besoin.
   window.addEventListener('pagehide', () => {
-    destroyYTPlayer()
+    if (pendingMappings.size > 0) void flushMappings()
+  })
+  window.addEventListener('pageshow', (e) => {
+    // Retour depuis le bfcache : réaffirme la Media Session et relance le
+    // polling si une piste était en cours, sans toucher au player lui-même.
+    const { current, isPlaying } = usePlayer.getState()
+    if (!current) return
+    if (e.persisted) {
+      reassertMediaSession()
+      setMediaSessionPlaybackState(isPlaying ? 'playing' : 'paused')
+      if (isPlaying && ytPoll === null) startYtPoll()
+    }
   })
 }
 
