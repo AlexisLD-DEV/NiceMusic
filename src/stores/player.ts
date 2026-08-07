@@ -378,7 +378,6 @@ function handleVisibilityChange(): void {
 
 /** Gère les touches de navigation pour la Media Session sur mobile. */
 function handleMediaKey(e: KeyboardEvent): void {
-  const { isPlaying } = usePlayer.getState()
   switch (e.key) {
     case 'ArrowLeft':
     case 'MediaPreviousTrack':
@@ -390,11 +389,7 @@ function handleMediaKey(e: KeyboardEvent): void {
       break
     case ' ':
     case 'MediaPlayPause':
-      if (isPlaying) {
-        usePlayer.getState().pause()
-      } else {
-        usePlayer.getState().play()
-      }
+      usePlayer.getState().toggle()
       break
   }
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useFavorites, useHistory } from '../api/queries'
+import { useFavorites } from '../api/queries'
 import { TrackList } from '../components/TrackList'
 import { SearchBar } from '../components/SearchBar'
 import { useBackfillState, usePlayer } from '../stores/player'
@@ -7,16 +7,14 @@ import { ShuffleIcon } from '../components/icons'
 
 /**
  * Page d'accueil, façon Deezer : recherche en haut, section « Favoris »
- * (triés du plus récent au plus vieux) puis section « Récemment écoutés ».
+ * (triés du plus récent au plus vieux).
  */
 export default function Favorites() {
   const { query, toggleFavorite } = useFavorites()
-  const history = useHistory()
   const backfill = useBackfillState()
   const [search, setSearch] = useState('')
 
   const tracks = query.data?.tracks ?? []
-  const recents = history.query.data?.tracks ?? []
 
   // Trie les favoris par date de publication YouTube (récent → vieux) ;
   // les titres sans date (pas encore résolus) vont en fin de liste, stables.
