@@ -95,21 +95,6 @@ export default function Favorites() {
           />
         )}
       </section>
-
-      {/* Section : récemment écoutés */}
-      {recents.length > 0 && (
-        <section>
-          <h2 className="mb-1 px-4 text-sm font-semibold uppercase tracking-wide text-muted">
-            Récemment écoutés
-          </h2>
-          <TrackList
-            tracks={recents.slice(0, 20)}
-            emptyMessage=""
-            playQueue={recents}
-            showFavorites={false}
-          />
-        </section>
-      )}
     </div>
   )
 }
