@@ -26,7 +26,31 @@ export default defineConfig({
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
           { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-        ]
+        ],
+        screenshots: [
+          {
+            src: 'https://music.ledeunf.fr/preview-mobile.png',
+            sizes: '540x960',
+            type: 'image/png',
+            form_factor: 'narrow'
+          },
+          {
+            src: 'https://music.ledeunf.fr/preview-desktop.png',
+            sizes: '1280x720',
+            type: 'image/png',
+            form_factor: 'wide'
+          }
+        ],
+        shortcuts: [
+          {
+            name: 'Lecture',
+            short_name: 'Lecture',
+            description: 'Lire la musique',
+            url: '/',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+          }
+        ],
+        prefer_related_applications: false
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],

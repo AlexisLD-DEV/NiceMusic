@@ -343,6 +343,10 @@ function startMediaSessionTimer(): void {
   if ('ontouchstart' in window || 'ontouchend' in window) {
     window.addEventListener('keydown', handleMediaKey)
   }
+
+  // Écouteur pour détecter les changements de visibilité (écran verrouillé/déverrouillé)
+  // et réaffirmer la Media Session pour garantir que les boutons restent actifs.
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 }
 
 function stopMediaSessionTimer(): void {
@@ -352,6 +356,24 @@ function stopMediaSessionTimer(): void {
   }
   // Nettoie les écouteurs de touches
   window.removeEventListener('keydown', handleMediaKey)
+  // Nettoie l'écouteur de visibilité
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+}
+
+/** Réaffirme la Media Session quand l'écran se verrouille/déverrouille. */
+function handleVisibilityChange(): void {
+  if (document.hidden) {
+    // Écran verrouillé : réaffirmer la Media Session pour maintenir les contrôles
+    if (usePlayer.getState().current) {
+      reassertMediaSession()
+      setMediaSessionPlaybackState(usePlayer.getState().isPlaying ? 'playing' : 'paused')
+    }
+  } else {
+    // Écran déverrouillé : réaffirmer aussi pour s'assurer que les boutons sont actifs
+    if (usePlayer.getState().current) {
+      reassertMediaSession()
+    }
+  }
 }
 
 /** Gère les touches de navigation pour la Media Session sur mobile. */
