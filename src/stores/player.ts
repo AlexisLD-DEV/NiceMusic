@@ -335,12 +335,45 @@ function startMediaSessionTimer(): void {
   msTimer = window.setInterval(() => {
     if (usePlayer.getState().current) reassertMediaSession()
   }, 2_000)
+
+  // Écouteurs de touches physiques pour mobile (boutons Précédent/Suivant)
+  // Sur mobile, la Media Session API ne montre pas toujours les boutons
+  // précédent/suivant automatiquement. Les touches de navigation permettent
+  // de les contrôler quand même.
+  if ('ontouchstart' in window || 'ontouchend' in window) {
+    window.addEventListener('keydown', handleMediaKey)
+  }
 }
 
 function stopMediaSessionTimer(): void {
   if (msTimer !== null) {
     window.clearInterval(msTimer)
     msTimer = null
+  }
+  // Nettoie les écouteurs de touches
+  window.removeEventListener('keydown', handleMediaKey)
+}
+
+/** Gère les touches de navigation pour la Media Session sur mobile. */
+function handleMediaKey(e: KeyboardEvent): void {
+  const { isPlaying } = usePlayer.getState()
+  switch (e.key) {
+    case 'ArrowLeft':
+    case 'MediaPreviousTrack':
+      usePlayer.getState().prev()
+      break
+    case 'ArrowRight':
+    case 'MediaNextTrack':
+      usePlayer.getState().next()
+      break
+    case ' ':
+    case 'MediaPlayPause':
+      if (isPlaying) {
+        usePlayer.getState().pause()
+      } else {
+        usePlayer.getState().play()
+      }
+      break
   }
 }
 
