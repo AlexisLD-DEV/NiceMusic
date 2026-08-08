@@ -26,7 +26,7 @@ import {
   updateMediaSession,
   updateMediaSessionPosition
 } from '../lib/mediaSession'
-import { silentAudioPause, silentAudioPlay, silentAudioStop } from '../lib/silentAudio'
+import { silentAudioPlay, silentAudioStop } from '../lib/silentAudio'
 
 /**
  * Store du lecteur — lecture via le lecteur officiel YouTube (IFrame API).
@@ -462,7 +462,9 @@ async function playYtTrack(track: Track): Promise<void> {
           startMediaSessionTimer()
           void prefetchUpcoming()
         } else if (state === 2) {
-          silentAudioPause()
+          // Ne PAS arrêter l'audio silencieux — sinon le widget disparaît.
+          // Seul le playbackState passe à "paused", le widget garde nos
+          // handlers (prev/next/play).
           usePlayer.setState({ isPlaying: false })
           setMediaSessionPlaybackState('paused')
           // NOTE : on ne coupe pas le poll ici. L'iframe peut émettre un état
