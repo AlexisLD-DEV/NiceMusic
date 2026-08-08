@@ -297,6 +297,13 @@ function startYtPoll(): void {
     // Watchdog : si on est censé jouer mais que le temps n'avance pas depuis
     // trop longtemps (et qu'on n'est pas à la fin), la lecture est bloquée
     // (iframe suspendue par l'OS) → on force le titre suivant.
+    // IMPORTANT : désactivé quand la page est cachée (écran verrouillé) —
+    // Chrome peut suspendre l'iframe un court instant ; forcer next() ici
+    // couperait la musique en cours.
+    if (document.hidden) {
+      lastPollTs = 0
+      return
+    }
     const { isPlaying } = usePlayer.getState()
     if (isPlaying) {
       if (lastPollTs !== 0 && t === lastPollTime && Date.now() - lastPollTs > STALL_MS) {

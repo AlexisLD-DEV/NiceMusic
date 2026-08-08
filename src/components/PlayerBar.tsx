@@ -20,11 +20,14 @@ export function PlayerBar() {
   return (
     <div className="relative border-t border-border bg-surface px-3 pb-1.5 pt-2">
       {/* Lecteur YouTube (officiel) — masqué par défaut, affichable à la demande */}
+      {/* IMPORTANT : quand il est caché, le laisser DANS le viewport (1×1px,
+          opacity 0) et non hors-écran (-9999px). Chrome Android gèle les
+          iframes hors-écran quand l'écran se verrouille → l'audio s'arrête. */}
       <div
         className={
           showVideo
             ? 'fixed bottom-40 right-3 z-50 w-72 overflow-hidden rounded-xl border border-border bg-black shadow-2xl'
-            : 'pointer-events-none fixed -left-[9999px] top-0 w-72'
+            : 'pointer-events-none fixed bottom-0 right-0 z-0 h-px w-px overflow-hidden opacity-0'
         }
         aria-hidden={!showVideo}
       >
