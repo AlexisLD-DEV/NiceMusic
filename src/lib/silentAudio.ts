@@ -6,9 +6,8 @@
  * Dès qu'il est en lecture, Chrome rend NOTRE Media Session "active"
  * → les boutons précédent/suivant apparaissent sur le widget.
  *
- * L'audio silencieux est synchronisé avec le player YouTube :
- * - YouTube play  → audio.play()
- * - YouTube pause → audio.pause()
+ * L'audio silencieux reste actif tant que la session est vivante (même
+ * sur pause — sinon le widget disparaît). Seul le stop explicite le coupe.
  *
  * Le fichier WAV est un silence de ~0.2s en boucle (data URI inline,
  * aucune requête réseau).
@@ -18,7 +17,6 @@
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
 
 let audioEl: HTMLAudioElement | null = null
-let synced = false
 
 /** Crée l'élément audio silencieux (une seule fois). */
 function ensureAudio(): HTMLAudioElement {
@@ -27,7 +25,6 @@ function ensureAudio(): HTMLAudioElement {
     audioEl.loop = true
     audioEl.volume = 0.001 // quasi inaudible, mais pas mute (mute peut être ignoré)
     audioEl.setAttribute('data-nicemusic-silent', '1')
-    // Ne pas afficher dans les contrôles média du navigateur (si supporté)
     audioEl.style.display = 'none'
     document.body.appendChild(audioEl)
   }
@@ -40,19 +37,6 @@ export function silentAudioPlay(): void {
   // play() peut être rejeté si pas de geste utilisateur — c'est OK,
   // le prochain appel (après interaction) fonctionnera
   a.play().catch(() => {})
-  synced = true
-}
-
-/** Appeler quand le player YouTube se met en pause. */
-export function silentAudioPause(): void {
-  if (!audioEl) return
-  audioEl.pause()
-  synced = false
-}
-
-/** true si l'audio silencieux est en cours de lecture. */
-export function isSilentAudioPlaying(): boolean {
-  return synced && audioEl !== null && !audioEl.paused
 }
 
 /** Nettoie (au stop/destroy du player). */
@@ -63,5 +47,4 @@ export function silentAudioStop(): void {
     audioEl.remove()
   } catch { /* ignoré */ }
   audioEl = null
-  synced = false
 }

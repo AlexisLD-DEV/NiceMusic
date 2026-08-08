@@ -176,11 +176,6 @@ async function flushMappings(): Promise<void> {
   }
 }
 
-if (typeof window !== 'undefined') {
-  // (le handler pagehide global est défini plus bas : flush mappings + pas
-  // de destruction du player — voir la fin du fichier)
-}
-
 /** Résout le videoId YouTube d'un titre (cache KV → recherche sinon). */
 async function resolveVideoId(track: Track): Promise<Track> {
   if (!track.unmapped) return track
