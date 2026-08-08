@@ -26,6 +26,7 @@ import {
   updateMediaSession,
   updateMediaSessionPosition
 } from '../lib/mediaSession'
+import { silentAudioPause, silentAudioPlay, silentAudioStop } from '../lib/silentAudio'
 
 /**
  * Store du lecteur — lecture via le lecteur officiel YouTube (IFrame API).
@@ -449,6 +450,7 @@ async function playYtTrack(track: Track): Promise<void> {
       },
       onStateChange: (state: YTPlaybackState) => {
         if (state === 1) {
+          silentAudioPlay()
           // Une vidéo a démarré : réinitialise le compteur d'erreurs consécutives
           consecutiveErrors = 0
           lastPollTime = -1
@@ -460,6 +462,7 @@ async function playYtTrack(track: Track): Promise<void> {
           startMediaSessionTimer()
           void prefetchUpcoming()
         } else if (state === 2) {
+          silentAudioPause()
           usePlayer.setState({ isPlaying: false })
           setMediaSessionPlaybackState('paused')
           // NOTE : on ne coupe pas le poll ici. L'iframe peut émettre un état
@@ -836,6 +839,7 @@ function stopCurrentPlayback(): void {
   ytPause()
   stopYtPoll()
   stopMediaSessionTimer()
+  silentAudioStop()
 }
 
 if (typeof window !== 'undefined') {

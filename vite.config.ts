@@ -53,7 +53,8 @@ export default defineConfig({
         prefer_related_applications: false
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+        globIgnores: ['**/index.html'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//]
       }
