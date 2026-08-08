@@ -1,0 +1,30 @@
+{
+  "responseContext": {
+    "visitorData": "CgtYUS1Ibi1zYlN5dyjgn93TBjIoCgJGUhIiEh4SHAsMDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicgS2LfAgrcAjIwLllUPXFYNGx5VUlWWE5HbUZFU1dZX0VheFdMVVJzMFF3Z25RZVk0Rl9zTjhxWnVCamNlRzRFcS1BQW5MazlVQnAwRTdONWhjOFF3M0ZPM2F0MzJ6Y0VWNmNtWmNGY1lXQmRqR3Q1bVc2WFBMek9GQWppMFVrUmpnUHhnY19ndjM4cjVhSEhTZzlobkN3ZWxHbjBEcDBIT2E4N1Vkb0RkQi13dVRRUXQxUkxyUF9LNkplYXk4cVEwY3duaVhMX21QS0ZkNjRDOGdodWNfNW9vM1dOQzRiSWZqTTdxUHBsNTlPWUhSSG80dl9SV0s5X2l1NjBnTDdHb1RhOUpEbWQ2RlktcUVWcDJTS2t0WWZJbGNIb19SNWtTN3R1UnFKRjk1bDBWM3NGVk1NUWV0WmlEWVk4UUYtZ1dZbVRrQ19UaVJwQXB0b3Fwb21xSy16dnF3VjhqSC1VeXdDQQ%3D%3D",
+    "serviceTrackingParams": [
+      {
+        "service": "ECATCHER",
+        "params": [
+          {
+            "key": "client.version",
+            "value": "1.60"
+          },
+          {
+            "key": "client.name",
+            "value": "ANDROID_VR"
+          }
+        ]
+      }
+    ],
+    "maxAgeSeconds": 0,
+    "rolloutToken": "CLei3eawkrvLnAEQ8qro9LCRlgMY8qro9LCRlgM%3D",
+    "responseId": "IhMIyqfo9LCRlgMVAkZPBB1FBjsY"
+  },
+  "playabilityStatus": {
+    "status": "LOGIN_REQUIRED",
+    "reason": "Connectez-vous pour confirmer que vous n'êtes pas un robot",
+    "contextParams": "Q0FFU0FnZ0I="
+  },
+  "trackingParams": "CAAQu2kiEwjKp-j0sJGWAxUCRk8EHUUGOxjKAQT1GgGi",
+  "adBreakHeartbeatParams": "Q0FBJTNE"
+}
