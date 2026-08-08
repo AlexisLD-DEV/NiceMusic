@@ -1,0 +1,191 @@
+{
+  "responseContext": {
+    "visitorData": "Cgtaek5mMDZtdVhwNCigoN3TBjIoCgJGUhIiEh4SHAsMDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicgQQ%3D%3D",
+    "serviceTrackingParams": [
+      {
+        "service": "GFEEDBACK",
+        "params": [
+          {
+            "key": "is_viewed_live",
+            "value": "False"
+          },
+          {
+            "key": "ipcc",
+            "value": "0"
+          },
+          {
+            "key": "is_alc_surface",
+            "value": "false"
+          },
+          {
+            "key": "logged_in",
+            "value": "0"
+          },
+          {
+            "key": "visitor_data",
+            "value": "Cgtaek5mMDZtdVhwNCigoN3TBjIoCgJGUhIiEh4SHAsMDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicgQQ%3D%3D"
+          }
+        ]
+      },
+      {
+        "service": "CSI",
+        "params": [
+          {
+            "key": "c",
+            "value": "WEB"
+          },
+          {
+            "key": "cver",
+            "value": "2.20250630.01.00"
+          },
+          {
+            "key": "yt_li",
+            "value": "0"
+          },
+          {
+            "key": "GetPlayer_rid",
+            "value": "0x47dd2f7230815612"
+          }
+        ]
+      },
+      {
+        "service": "GUIDED_HELP",
+        "params": [
+          {
+            "key": "logged_in",
+            "value": "0"
+          }
+        ]
+      },
+      {
+        "service": "ECATCHER",
+        "params": [
+          {
+            "key": "client.version",
+            "value": "2.20250630"
+          },
+          {
+            "key": "client.name",
+            "value": "WEB"
+          }
+        ]
+      }
+    ],
+    "maxAgeSeconds": 0,
+    "mainAppWebResponseContext": {
+      "loggedOut": true,
+      "trackingParam": "k5_fmPxhoXZRCCc0zoADSBvMvCVvD41HsdZo7wxjU0IAC5hgxkMscMZUpzRMkuMYNLBwOcCw59TLtslLKPQGSS"
+    },
+    "responseId": "IhMIzc37krGRlgMVi9BJBx2SYgY8",
+    "webResponseContextExtensionData": {
+      "webResponseContextPreloadData": {
+        "preloadMessageNames": [
+          "playerErrorMessageRenderer"
+        ]
+      },
+      "hasDecorated": true
+    }
+  },
+  "playabilityStatus": {
+    "status": "ERROR",
+    "reason": "Cette vidéo n'est pas disponible",
+    "errorScreen": {
+      "playerErrorMessageRenderer": {
+        "subreason": {
+          "runs": [
+            {
+              "text": "Regardez-le sur la dernière version de YouTube.",
+              "navigationEndpoint": {
+                "clickTrackingParams": "CAAQu2kiEwjNzfuSsZGWAxWL0EkHHZJiBjzKAQSToRIK",
+                "commandMetadata": {
+                  "webCommandMetadata": {
+                    "url": "market://details?id=com.google.android.youtube&url=https%3A%2F%Fwww.youtube.com%2Fwatch%3Fv%3DJYig9HkJ7pE",
+                    "webPageType": "WEB_PAGE_TYPE_UNKNOWN",
+                    "rootVe": 83769
+                  }
+                },
+                "urlEndpoint": {
+                  "url": "market://details?id=com.google.android.youtube&url=https%3A%2F%Fwww.youtube.com%2Fwatch%3Fv%3DJYig9HkJ7pE",
+                  "target": "TARGET_NEW_WINDOW"
+                }
+              }
+            }
+          ]
+        },
+        "learnMore": {
+          "runs": [
+            {
+              "text": "En savoir plus",
+              "navigationEndpoint": {
+                "clickTrackingParams": "CAAQu2kiEwjNzfuSsZGWAxWL0EkHHZJiBjzKAQSToRIK",
+                "commandMetadata": {
+                  "webCommandMetadata": {
+                    "url": "//support.google.com/youtube/answer/12318250?hl=fr",
+                    "webPageType": "WEB_PAGE_TYPE_UNKNOWN",
+                    "rootVe": 83769
+                  }
+                },
+                "urlEndpoint": {
+                  "url": "//support.google.com/youtube/answer/12318250?hl=fr",
+                  "target": "TARGET_NEW_WINDOW"
+                }
+              }
+            }
+          ]
+        },
+        "reason": {
+          "runs": [
+            {
+              "text": "Le contenu suivant n'est pas disponible dans cette application."
+            }
+          ]
+        },
+        "thumbnail": {
+          "thumbnails": [
+            {
+              "url": "//s.ytimg.com/yts/img/meh7-vflGevej7.png",
+              "width": 140,
+              "height": 100
+            },
+            {
+              "url": "//s.ytimg.com/yts/img/meh7-vflGevej7.png",
+              "width": 140,
+              "height": 100
+            }
+          ]
+        },
+        "icon": {
+          "iconType": "ERROR_OUTLINE"
+        }
+      }
+    },
+    "skip": {
+      "playabilityErrorSkipConfig": {
+        "skipOnPlayabilityError": false
+      }
+    },
+    "contextParams": "Q0FFU0FnZ0I="
+  },
+  "trackingParams": "CAAQu2kiEwjNzfuSsZGWAxWL0EkHHZJiBjzKAQSToRIK",
+  "adBreakHeartbeatParams": "Q0FBJTNE",
+  "frameworkUpdates": {
+    "entityBatchUpdate": {
+      "mutations": [
+        {
+          "entityKey": "Eg0KC0pZaWc5SGtKN3BFIPYBKAE%3D",
+          "type": "ENTITY_MUTATION_TYPE_REPLACE",
+          "payload": {
+            "offlineabilityEntity": {
+              "key": "Eg0KC0pZaWc5SGtKN3BFIPYBKAE%3D",
+              "addToOfflineButtonState": "ADD_TO_OFFLINE_BUTTON_STATE_UNKNOWN"
+            }
+          }
+        }
+      ],
+      "timestamp": {
+        "seconds": "1786204192",
+        "nanos": 197706435
+      }
+    }
+  }
+}

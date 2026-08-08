@@ -24,9 +24,49 @@ let currentTrack: Track | null = null
 let currentPosition = 0
 let currentDuration = 0
 
+// Protection anti-écrasement : l'iframe YouTube appelle setActionHandler
+// après chaque vidéo, ce qui efface nos handlers précédent/suivant. On
+// intercepte setActionHandler pour ré-appliquer immédiatement les nôtres.
+let nativeSetActionHandler: typeof navigator.mediaSession.setActionHandler | null = null
+function patchActionHandler(): void {
+  if (!('mediaSession' in navigator)) return
+  const ms = navigator.mediaSession
+  if (!nativeSetActionHandler) {
+    nativeSetActionHandler = ms.setActionHandler.bind(ms)
+  }
+  ms.setActionHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+    // Laisse passer play/pause/stop (l'iframe les gère correctement)
+    if (action === 'play' || action === 'pause' || action === 'stop') {
+      nativeSetActionHandler!(action, handler)
+      return
+    }
+    // Bloque l'écrasement de nos handlers prev/next/seek
+    if (!currentHandlers) {
+      nativeSetActionHandler!(action, null)
+      return
+    }
+    switch (action) {
+      case 'previoustrack':
+        nativeSetActionHandler!('previoustrack', currentHandlers.onPrev)
+        break
+      case 'nexttrack':
+        nativeSetActionHandler!('nexttrack', currentHandlers.onNext)
+        break
+      case 'seekto':
+        nativeSetActionHandler!('seekto', (d) => {
+          if (d.seekTime != null) currentHandlers!.onSeek(d.seekTime)
+        })
+        break
+      default:
+        nativeSetActionHandler!(action, handler)
+    }
+  }
+}
+
 /** Enregistre les handlers d'action (écran verrouillé). */
 export function setupMediaSession(handlers: Handlers): void {
   currentHandlers = handlers
+  patchActionHandler()
   if (!('mediaSession' in navigator)) return
   const ms = navigator.mediaSession
   try {

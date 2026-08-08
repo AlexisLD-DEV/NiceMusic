@@ -283,6 +283,10 @@ function startYtPoll(): void {
     const d = ytDuration()
     usePlayer.setState({ currentTime: t, duration: d })
     updateMediaSessionPosition(t, d)
+    // L'iframe YouTube écrase les handlers Media Session à chaque événement ;
+    // réaffirmer ici (chaque seconde, pas seulement toutes les 2s) garantit
+    // que les boutons précédent/suivant restent visibles sur le widget.
+    reassertMediaSession()
     const { current } = usePlayer.getState()
     if (current && t >= 20) void recordHistory(current)
 
